@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-25
+
+First public release. Portfolio alignment plus the security/observability
+hardening from the MCP best-practice audit (production-ready; audit artifacts
+under `audits/`).
+
 ### Security
 - **SEC-021 — egress allow-list:** an immutable `ALLOWED_HOSTS` frozenset +
   `assert_host_allowed()` (HTTPS-only, two fixed EFV hosts) is enforced before
