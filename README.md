@@ -238,7 +238,7 @@ tool is added.
 ## MCP Protocol Version
 
 The protocol version is negotiated at the `initialize` handshake by
-[FastMCP](https://pypi.org/project/fastmcp/) (pinned `fastmcp>=1.26.0` in
+[FastMCP](https://pypi.org/project/fastmcp/) (pinned `fastmcp>=3.4` in
 `pyproject.toml`), which builds on the `mcp` Python SDK. Dependencies are kept
 current via monthly Dependabot PRs (`.github/dependabot.yml`); protocol-relevant
 bumps are noted in [`CHANGELOG.md`](CHANGELOG.md).

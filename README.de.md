@@ -246,7 +246,7 @@ schreibfähigen Tools ein Re-Audit erfordern.
 ## MCP-Protokoll-Version
 
 Die Protokoll-Version wird beim `initialize`-Handshake von
-[FastMCP](https://pypi.org/project/fastmcp/) ausgehandelt (fixiert `fastmcp>=1.26.0`
+[FastMCP](https://pypi.org/project/fastmcp/) ausgehandelt (fixiert `fastmcp>=3.4`
 in `pyproject.toml`), das auf dem `mcp`-Python-SDK aufbaut. Abhängigkeiten werden
 über monatliche Dependabot-PRs aktuell gehalten (`.github/dependabot.yml`);
 protokoll-relevante Bumps werden in [`CHANGELOG.md`](CHANGELOG.md) vermerkt.
