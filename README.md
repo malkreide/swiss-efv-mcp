@@ -1,17 +1,19 @@
-<!-- Part of the Swiss Public Data MCP Portfolio · https://github.com/malkreide -->
+> 🇨🇭 Part of the [**Swiss Public Data MCP Portfolio**](https://github.com/malkreide/swiss-public-data-mcp) — open-source MCP servers connecting AI agents to Swiss public and open data.
+> This is a private project. It is independent of any employer or institutional affiliation.
 
-# swiss-efv-mcp
+# 🏛️ swiss-efv-mcp
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Python](https://img.shields.io/badge/python-3.11+-blue)
-![MCP](https://img.shields.io/badge/MCP-model--context--protocol-black)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](CHANGELOG.md)
+[![CI](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
+[![MCP](https://img.shields.io/badge/MCP-Model_Context_Protocol-8A2BE2.svg)](https://modelcontextprotocol.io/)
+[![Auth: none](https://img.shields.io/badge/auth-none-brightgreen.svg)](#architecture-decision)
+[![Portfolio](https://img.shields.io/badge/portfolio-swiss--public--data--mcp-informational)](https://github.com/malkreide/swiss-public-data-mcp)
 
 > MCP server for Swiss federal finances (EFV): budget, debt, forecasts and spending by task and institution.
 
 [🇩🇪 Deutsche Version](README.de.md)
-
----
 
 ## Overview
 
@@ -21,7 +23,17 @@ budget** — federal revenue, expenditure, balance, debt ratios (with forecasts 
 2029), a hierarchical budget drill-down, and spending by department. Data comes
 from the Eidgenössische Finanzverwaltung (EFV) via opendata.swiss (OGD Schweiz).
 
-It is a **private, non-affiliated** project and carries no institutional mandate.
+## Features
+
+- Five read-only tools over the curated EFV FS/GFS dump files.
+- Headline series 1990–2029 per household (bund, ktn, gdn, staat, sv) and model
+  (FS / GFS); every point carries `is_projection` so actuals and plan/forecast
+  years are unambiguous.
+- Hierarchical federal-budget drill-down and spending by department / unit.
+- 24 h TTL in-memory cache with stale-serve fallback; retry with exponential
+  backoff (2/4/8 s); `dump_status` never returns empty silently.
+- Dual transport: `stdio` (local) and SSE (cloud).
+- No authentication required — public open-government data (No-Auth-First).
 
 ## 🎯 Anchor Demo Query
 
@@ -36,23 +48,11 @@ fiscal_budget_breakdown(topic="Ausgaben nach Aufgabengebiet", level=2)
 Cross-read with `swiss-snb-mcp`, this connects the interest-rate cycle to the
 federal deficit — something neither server can answer alone.
 
-## Features
-
-- **`fiscal_headline`** — revenue / expenditure / balance / debt ratios over
-  1990–2029, per household (bund, ktn, gdn, staat, sv) and model (FS / GFS).
-  Every point carries `is_projection` so actuals and plan/forecast years are
-  unambiguous.
-- **`fiscal_budget_breakdown`** — hierarchical federal budget by topic
-  (Ausgaben nach Art / nach Aufgabengebiet, Einnahmen, Bilanz, …).
-- **`fiscal_by_institution`** — spending per department / administrative unit
-  since 2007 (Personalausgaben, Informatik, external services, FTE).
-- **`fiscal_list_dimensions`** — discover valid parameter values.
-- **`dump_status`** — cache freshness and upstream health (graceful degradation).
-
 ## Prerequisites
 
 - Python 3.11+
-- [`uv`](https://docs.astral.sh/uv/) / `uvx` (recommended) or `pip`
+- [`uv` / `uvx`](https://docs.astral.sh/uv/) (recommended) or `pip`
+- Network access to `data.finance.admin.ch` and `efv.admin.ch` — no API key needed
 
 ## Installation
 
@@ -61,8 +61,6 @@ uvx swiss-efv-mcp            # zero-install run (once published to PyPI)
 # or
 pip install swiss-efv-mcp
 ```
-
-## Usage / Quickstart
 
 Claude Desktop (`claude_desktop_config.json`):
 
@@ -77,19 +75,65 @@ Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-Cloud (SSE, e.g. Railway / Render):
+## Quickstart
 
 ```bash
-TRANSPORT=sse PORT=8000 swiss-efv-mcp
+# Run locally over stdio (default transport)
+uvx swiss-efv-mcp
+
+# From a checkout, without installing
+PYTHONPATH=src python -m swiss_efv_mcp
 ```
 
 ## Configuration
 
-| Env var     | Default   | Purpose                                   |
-|-------------|-----------|-------------------------------------------|
-| `TRANSPORT` | `stdio`   | `stdio` (Claude Desktop) or `sse` (cloud) |
-| `HOST`      | `0.0.0.0` | bind host for SSE                         |
-| `PORT`      | `8000`    | bind port for SSE                         |
+All configuration is via environment variables. Defaults are safe for local use.
+
+| Variable    | Default     | Purpose                                                                    |
+|-------------|-------------|----------------------------------------------------------------------------|
+| `TRANSPORT` | `stdio`     | Transport: `stdio` (Claude Desktop) or `sse` / `streamable-http` (cloud)   |
+| `HOST`      | `127.0.0.1` | Bind host (SSE only). Loopback by default; set `0.0.0.0` **only** in a container |
+| `PORT`      | `8000`      | Bind port (SSE only)                                                        |
+
+Cloud (Render / Railway):
+
+```bash
+TRANSPORT=sse PORT=8000 swiss-efv-mcp   # exposes /sse
+```
+
+## Available Tools
+
+| Tool | Purpose |
+|---|---|
+| `fiscal_headline` | Revenue / expenditure / balance / debt ratios over 1990–2029, per household and model; every point flags `is_projection` |
+| `fiscal_budget_breakdown` | Hierarchical federal budget by topic (Ausgaben nach Art / nach Aufgabengebiet, Einnahmen, Bilanz, …) |
+| `fiscal_by_institution` | Spending per department / administrative unit since 2007 (Personalausgaben, Informatik, external services, FTE) |
+| `fiscal_list_dimensions` | Discover valid parameter values — call this first to build correct arguments |
+| `dump_status` | Cache freshness and upstream health per dataset; never returns empty silently |
+
+All tools are **read-only by design**: they only issue HTTP GETs against the EFV
+dump files and have no write, send, or filesystem capability.
+
+**MCP primitives.** This server uses only the **Tools** primitive. The EFV data
+are sliced live from cached dumps with no stable resource hierarchy to expose as
+*Resources*, and there are no server-authored *Prompts*. The five tools are small
+and closely related, so they live in a single `server.py` rather than a `tools/`
+package.
+
+## Architecture
+
+```
+                      ┌──────────────────────────────┐
+   Claude / Agent ──▶ │  swiss-efv-mcp (FastMCP)      │
+                      │  5 tools · Pydantic v2 env.   │
+                      └───────────────┬──────────────┘
+                                      │ fetch + retry + TTL cache
+              ┌───────────────────────┴───────────────────────┐
+              ▼                                               ▼
+   data.finance.admin.ch                          efv.admin.ch/dam
+   fs_dashboard/main_extern.csv                   bundeshaushalt_de.csv
+   (headline, 1990–2029)                          institutionen_de.csv
+```
 
 ## Architecture decision
 
@@ -111,18 +155,42 @@ Consequences:
 - Retry with exponential backoff on all HTTP; `dump_status` always returns a
   readable state.
 
+## Project Structure
+
 ```
-                      ┌──────────────────────────────┐
-   Claude / Agent ──▶ │  swiss-efv-mcp (FastMCP)      │
-                      │  5 tools · Pydantic v2 env.   │
-                      └───────────────┬──────────────┘
-                                      │ fetch + retry + TTL cache
-              ┌───────────────────────┴───────────────────────┐
-              ▼                                               ▼
-   data.finance.admin.ch                          efv.admin.ch/dam
-   fs_dashboard/main_extern.csv                   bundeshaushalt_de.csv
-   (headline, 1990–2029)                          institutionen_de.csv
+swiss-efv-mcp/
+├── src/swiss_efv_mcp/
+│   ├── __init__.py
+│   ├── __main__.py    # entry point; dual transport (stdio / SSE)
+│   ├── client.py      # dump-first data layer: retry, UA, NA-cleaning, TTL cache
+│   ├── models.py      # Pydantic v2 envelopes (source + provenance)
+│   └── server.py      # 5 FastMCP tools + testable *_impl functions
+├── tests/             # respx mock tests + @pytest.mark.live
+├── README.md
+├── README.de.md
+├── CHANGELOG.md
+├── LICENSE
+└── pyproject.toml
 ```
+
+## Safety & Limits
+
+- **Read-only by design.** Every tool only issues HTTP GETs against the EFV dump
+  files; there are no write, send, or filesystem capabilities.
+- **Fixed egress.** Dataset URLs are hardcoded constants on two EFV hosts
+  (`data.finance.admin.ch`, `efv.admin.ch`); no user input ever enters a URL, so
+  there is no SSRF surface.
+- **TLS on.** httpx certificate verification is on by default and never disabled.
+- **No credentials.** The endpoints are public OGD; no API keys or secrets are
+  stored or forwarded. A browser `User-Agent` is injected because the endpoints
+  `403` the default httpx/curl UA (see Known limitations) — do not remove it.
+- **Graceful degradation.** Retry with exponential backoff (2/4/8 s); a stale
+  cache is served over an empty response; `dump_status` always returns a readable
+  state and never a silent empty.
+- **Loopback by default.** SSE binds to `HOST`, default `127.0.0.1`; set
+  `HOST=0.0.0.0` **only** inside a container (the provided [`Dockerfile`](Dockerfile) does).
+- **Not authoritative.** Figures are not official; consult the EFV originals for
+  official use.
 
 ## Known limitations
 
@@ -137,41 +205,70 @@ Live-probe findings (2026-07-24), also in `CHANGELOG.md → Known findings`:
 | **Accounting-model break at 2022/2023** ("bis 2022" vs "ab 2023" topics) | series has a seam; a `note` flags affected topics |
 | Detail cubes (157 MB / 1.23 GB) not served | Phase 2; use the curated files for now |
 
-## Project Structure
+## Project Phase
 
-```
-swiss-efv-mcp/
-├── src/swiss_efv_mcp/
-│   ├── client.py      # dump-first data layer: retry, UA, NA-cleaning, TTL cache
-│   ├── models.py      # Pydantic v2 envelopes (source + provenance)
-│   ├── server.py      # 5 FastMCP tools + testable *_impl functions
-│   └── __main__.py    # dual stdio / sse transport
-└── tests/             # respx mock tests + @pytest.mark.live
-```
+This server is in **Phase 1 (read-only)**. Every tool only ever fetches the
+public EFV dump files — there are no write, send, or filesystem capabilities.
+
+| Phase | Scope | Status |
+|---|---|---|
+| **1 — Read-only** | Headline series, budget breakdown, spending by institution | ✅ current |
+| 2 — Detail cubes | Pre-process the 157 MB / 1.23 GB cubes to SQLite/Parquet | planned |
+| 3 — Multi-agent | (none planned) | — |
+
+A transition to a later phase would require a re-audit before any write-capable
+tool is added.
+
+## MCP Protocol Version
+
+The protocol version is negotiated at the `initialize` handshake by
+[FastMCP](https://pypi.org/project/fastmcp/) (pinned `fastmcp>=1.26.0` in
+`pyproject.toml`), which builds on the `mcp` Python SDK. Dependencies are kept
+current via monthly Dependabot PRs (`.github/dependabot.yml`); protocol-relevant
+bumps are noted in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Testing
 
 ```bash
-PYTHONPATH=src pytest -m "not live"   # CI: fast, no network
-PYTHONPATH=src pytest -m live         # hits the real EFV endpoints
+PYTHONPATH=src pytest tests/ -m "not live"   # offline, respx-mocked
+PYTHONPATH=src pytest tests/ -m live         # hits the real EFV endpoints
+PYTHONPATH=src ruff check src tests
 ```
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md)
+See [CHANGELOG.md](CHANGELOG.md).
 
-## Credits & Related Projects
+## Security
 
-- Data: **Eidgenössische Finanzverwaltung EFV** via opendata.swiss (OGD Schweiz, frei nutzbar)
-- Companion: [`swiss-snb-mcp`](https://github.com/malkreide) (monetary policy) — the fiscal/monetary pair
-- Part of the **Swiss Public Data MCP Portfolio**
+See [SECURITY.md](SECURITY.md) for the security posture, hardening controls, and
+how to report a vulnerability.
+
+## Contributing
+
+Issues and pull requests are welcome. Please keep tools read-only, run
+`ruff check` and the offline test suite before submitting, and add a
+`CHANGELOG.md` entry under `[Unreleased]` for user-facing changes. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+Maintainers: see [PUBLISHING.md](PUBLISHING.md) for the step-by-step PyPI release
+process (Trusted Publishing via GitHub Release).
 
 ## License
 
-MIT License — see [LICENSE](LICENSE)
+MIT for this server — see [LICENSE](LICENSE). The EFV data remain subject to the
+OGD Schweiz terms (freely usable, with attribution).
 
 ## Author
 
-malkreide · [github.com/malkreide](https://github.com/malkreide)
+**Hayal Oezkan** · [github.com/malkreide](https://github.com/malkreide)
+
+## Credits & Related Projects
+
+- Data: **Eidgenössische Finanzverwaltung EFV** via opendata.swiss (OGD Schweiz, freely usable)
+- Companion: [`swiss-snb-mcp`](https://github.com/malkreide) (monetary policy) — the fiscal/monetary pair
+- Portfolio index: [swiss-public-data-mcp](https://github.com/malkreide/swiss-public-data-mcp)
 
 > Disclaimer: private project, independent of any employer or institution. No warranty; figures are not authoritative — consult the EFV originals for official use.
+
+<!-- mcp-name: io.github.malkreide/swiss-efv-mcp -->
