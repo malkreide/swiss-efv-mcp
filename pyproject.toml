@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "swiss-efv-mcp"
+version = "0.1.0"
+description = "MCP server for Swiss federal finances (EFV) — budget, debt, forecasts and spending by task and institution"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "malkreide" }]
+keywords = ["mcp", "model-context-protocol", "llm", "swiss-open-data", "public-finance", "efv"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "fastmcp>=1.26.0",
+    "httpx>=0.27",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+swiss-efv-mcp = "swiss_efv_mcp.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/malkreide/swiss-efv-mcp"
+Source = "https://github.com/malkreide/swiss-efv-mcp"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/swiss_efv_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "live: tests that hit the real EFV endpoints (excluded from CI via -m 'not live')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

@@ -1,0 +1,248 @@
+"""FastMCP server exposing Swiss federal finance (EFV) tools.
+
+Business logic lives in ``*_impl`` functions that take an :class:`EFVClient`,
+so they are unit-testable with respx without spinning up MCP. The ``@mcp.tool``
+wrappers are thin adapters over a module-level client.
+
+Anchor demo query:
+    "Wie hat sich der Bundessaldo seit der SNB-Zinswende 2022 entwickelt — und
+     in welche Aufgabengebiete floss das Ausgabenwachstum?"
+    -> fiscal_headline(variable='saldo', household='bund', 2021..2029)
+     + fiscal_budget_breakdown(topic='Ausgaben nach Aufgabengebiet')
+"""
+
+from __future__ import annotations
+
+from fastmcp import FastMCP
+
+from .client import EFVClient, clean, is_projection, to_float, to_year
+from .models import (
+    BreakdownItem,
+    BudgetBreakdown,
+    Dimensions,
+    HeadlineSeries,
+    InstitutionPoint,
+    InstitutionSeries,
+    Point,
+    StatusReport,
+)
+
+mcp = FastMCP("swiss-efv-mcp")
+client = EFVClient()
+
+
+# --- pure implementations (testable) ----------------------------------------
+
+
+async def headline_impl(
+    c: EFVClient,
+    variable: str,
+    household: str = "bund",
+    model: str = "fs",
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> HeadlineSeries:
+    rows, prov = await c.load("headline")
+    points: list[Point] = []
+    for r in rows:
+        if clean(r.get("variable")) != variable:
+            continue
+        if clean(r.get("hh")) != household:
+            continue
+        if clean(r.get("model")) != model:
+            continue
+        y = to_year(r.get("jahr"))
+        if y is None:
+            continue
+        if year_from is not None and y < year_from:
+            continue
+        if year_to is not None and y > year_to:
+            continue
+        src = clean(r.get("source"))
+        points.append(
+            Point(
+                year=y,
+                value=to_float(r.get("value")),
+                kind=src,
+                is_projection=is_projection(src),
+            )
+        )
+    points.sort(key=lambda p: p.year)
+    return HeadlineSeries(
+        provenance=prov, variable=variable, household=household, model=model, points=points
+    )
+
+
+async def budget_impl(
+    c: EFVClient,
+    topic: str = "Ausgaben nach Aufgabengebiet",
+    year: int | None = None,
+    level: int = 2,
+    contains: str | None = None,
+) -> BudgetBreakdown:
+    rows, prov = await c.load("budget")
+    years = sorted({to_year(r.get("year")) for r in rows if to_year(r.get("year")) is not None})
+    target_year = year if year is not None else (years[-1] if years else 0)
+
+    items: list[BreakdownItem] = []
+    for r in rows:
+        if clean(r.get("topic")) != topic:
+            continue
+        if to_year(r.get("year")) != target_year:
+            continue
+        lvl = to_year(r.get("category_level"))
+        if lvl != level:
+            continue
+        path = clean(r.get("path")) or ""
+        if contains and contains.lower() not in path.lower():
+            continue
+        items.append(
+            BreakdownItem(
+                label=clean(r.get("variable_name")) or path,
+                level=lvl,
+                value=to_float(r.get("value")),
+                path=path,
+            )
+        )
+    items.sort(key=lambda i: (i.value is None, -(i.value or 0)))
+    note = None
+    if topic.endswith("ab 2023)") or topic.endswith("bis 2022)"):
+        note = "Accounting-model break: 2023 uses a new model; series has a seam at 2022/2023."
+    return BudgetBreakdown(
+        provenance=prov, topic=topic, year=target_year, level=level, items=items, note=note
+    )
+
+
+async def institution_impl(
+    c: EFVClient,
+    departement: str | None = None,
+    variable: str = "Personalausgaben",
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> InstitutionSeries:
+    rows, prov = await c.load("institutions")
+    points: list[InstitutionPoint] = []
+    for r in rows:
+        if clean(r.get("variable_name")) != variable:
+            continue
+        dep = clean(r.get("departement"))
+        if departement is not None and dep != departement:
+            continue
+        y = to_year(r.get("year"))
+        if y is None:
+            continue
+        if year_from is not None and y < year_from:
+            continue
+        if year_to is not None and y > year_to:
+            continue
+        points.append(
+            InstitutionPoint(
+                departement=dep,
+                verwaltungseinheit=clean(r.get("verwaltungseinheit")),
+                variable=variable,
+                year=y,
+                value=to_float(r.get("value")),
+            )
+        )
+    points.sort(key=lambda p: (p.year, p.verwaltungseinheit or ""))
+    return InstitutionSeries(
+        provenance=prov,
+        filter_departement=departement,
+        filter_variable=variable,
+        points=points,
+    )
+
+
+async def dimensions_impl(c: EFVClient) -> Dimensions:
+    h, hp = await c.load("headline")
+    b, _ = await c.load("budget")
+    i, _ = await c.load("institutions")
+
+    def distinct(rows, col):
+        return sorted({v for r in rows if (v := clean(r.get(col))) is not None})
+
+    return Dimensions(
+        provenance=hp,
+        headline_variables=distinct(h, "variable"),
+        households=distinct(h, "hh"),
+        models=distinct(h, "model"),
+        budget_topics=distinct(b, "topic"),
+        institution_departments=distinct(i, "departement"),
+        institution_variables=distinct(i, "variable_name"),
+    )
+
+
+def status_impl(c: EFVClient) -> StatusReport:
+    ds = c.status()
+    errors = [k for k, v in ds.items() if v.get("last_error")]
+    healthy = not errors
+    msg = (
+        "All datasets reachable or cached."
+        if healthy
+        else f"Degraded: last error on {', '.join(errors)}. Retry in ~10 minutes."
+    )
+    return StatusReport(datasets=ds, healthy=healthy, message=msg)
+
+
+# --- MCP tool wrappers ------------------------------------------------------
+
+
+@mcp.tool()
+async def fiscal_headline(
+    variable: str,
+    household: str = "bund",
+    model: str = "fs",
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> dict:
+    """Headline fiscal time series (revenue, expenditure, balance, debt ratios,
+    forecasts to 2029). variable e.g. 'saldo', 'einnahmen', 'ausgaben',
+    'bruttoschuldenquote'. household: bund|ktn|gdn|staat|sv. model: fs|gfs.
+    Use fiscal_list_dimensions to discover valid values."""
+    return (
+        await headline_impl(client, variable, household, model, year_from, year_to)
+    ).model_dump()
+
+
+@mcp.tool()
+async def fiscal_budget_breakdown(
+    topic: str = "Ausgaben nach Aufgabengebiet",
+    year: int | None = None,
+    level: int = 2,
+    contains: str | None = None,
+) -> dict:
+    """Hierarchical federal-budget breakdown for one topic and year. topic e.g.
+    'Ausgaben nach Aufgabengebiet', 'Ausgaben nach Art', 'Einnahmen'. level is
+    the hierarchy depth (1 = total, 2 = first breakdown ...). 'contains' filters
+    the path substring for drill-down."""
+    return (await budget_impl(client, topic, year, level, contains)).model_dump()
+
+
+@mcp.tool()
+async def fiscal_by_institution(
+    departement: str | None = None,
+    variable: str = "Personalausgaben",
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> dict:
+    """Federal spending by department / administrative unit since 2007. variable
+    one of: 'Personalausgaben', 'Informatik', 'Beratung und externe
+    Dienstleistungen', 'Anzahl Vollzeitstellen'."""
+    return (
+        await institution_impl(client, departement, variable, year_from, year_to)
+    ).model_dump()
+
+
+@mcp.tool()
+async def fiscal_list_dimensions() -> dict:
+    """List the valid dimension values across all datasets (variables,
+    households, models, budget topics, departments). Call this first to build
+    correct parameters for the other tools."""
+    return (await dimensions_impl(client)).model_dump()
+
+
+@mcp.tool()
+async def dump_status() -> dict:
+    """Report cache freshness and upstream health per dataset. Never returns
+    empty silently — used for graceful degradation."""
+    return status_impl(client).model_dump()
