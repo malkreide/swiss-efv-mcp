@@ -87,13 +87,17 @@ PYTHONPATH=src python -m swiss_efv_mcp
 
 ## Configuration
 
-All configuration is via environment variables. Defaults are safe for local use.
+All configuration is loaded once into a typed `Settings` object
+(`pydantic-settings`). The legacy unprefixed names below keep working; the
+canonical names use the `EFV_MCP_` prefix. Defaults are safe for local use.
 
 | Variable    | Default     | Purpose                                                                    |
 |-------------|-------------|----------------------------------------------------------------------------|
 | `TRANSPORT` | `stdio`     | Transport: `stdio` (Claude Desktop) or `sse` / `streamable-http` (cloud)   |
 | `HOST`      | `127.0.0.1` | Bind host (SSE only). Loopback by default; set `0.0.0.0` **only** in a container |
 | `PORT`      | `8000`      | Bind port (SSE only)                                                        |
+| `EFV_MCP_LOG_LEVEL`    | `INFO` | structlog level (JSON to stderr)                                  |
+| `EFV_MCP_CORS_ORIGINS` | `[]`   | SSE only: explicit allowed browser origins (default-deny; comma-separated or JSON) |
 
 Cloud (Render / Railway):
 
@@ -111,8 +115,9 @@ TRANSPORT=sse PORT=8000 swiss-efv-mcp   # exposes /sse
 | `fiscal_list_dimensions` | Discover valid parameter values — call this first to build correct arguments |
 | `dump_status` | Cache freshness and upstream health per dataset; never returns empty silently |
 
-All tools are **read-only by design**: they only issue HTTP GETs against the EFV
-dump files and have no write, send, or filesystem capability.
+All tools are **read-only**: each is annotated `readOnlyHint: true`,
+`destructiveHint: false`, only issues HTTP GETs against the EFV dump files, and
+has no write, send, or filesystem capability.
 
 **MCP primitives.** This server uses only the **Tools** primitive. The EFV data
 are sliced live from cached dumps with no stable resource hierarchy to expose as
@@ -161,34 +166,45 @@ Consequences:
 swiss-efv-mcp/
 ├── src/swiss_efv_mcp/
 │   ├── __init__.py
-│   ├── __main__.py    # entry point; dual transport (stdio / SSE)
-│   ├── client.py      # dump-first data layer: retry, UA, NA-cleaning, TTL cache
-│   ├── models.py      # Pydantic v2 envelopes (source + provenance)
-│   └── server.py      # 5 FastMCP tools + testable *_impl functions
-├── tests/             # respx mock tests + @pytest.mark.live
-├── README.md
-├── README.de.md
-├── CHANGELOG.md
-├── LICENSE
+│   ├── __main__.py        # entry point; dual transport (stdio / SSE+CORS)
+│   ├── client.py          # dump-first data layer: egress allow-list, retry, UA, TTL cache
+│   ├── logging_config.py  # structlog JSON to stderr
+│   ├── models.py          # Pydantic v2 envelopes (source + provenance)
+│   ├── server.py          # 5 FastMCP tools (annotated) + testable *_impl functions
+│   └── settings.py        # typed pydantic-settings config
+├── tests/                 # respx mock tests + hardening tests + @pytest.mark.live
+├── docs/                  # network-egress.md + accepted-risk ADRs
+├── audits/                # MCP best-practice audit runs (findings, report, summary)
+├── README.md · README.de.md · CHANGELOG.md · SECURITY.md · CONTRIBUTING.md
+├── Dockerfile · server.json · LICENSE
 └── pyproject.toml
 ```
 
 ## Safety & Limits
 
-- **Read-only by design.** Every tool only issues HTTP GETs against the EFV dump
-  files; there are no write, send, or filesystem capabilities.
-- **Fixed egress.** Dataset URLs are hardcoded constants on two EFV hosts
-  (`data.finance.admin.ch`, `efv.admin.ch`); no user input ever enters a URL, so
-  there is no SSRF surface.
+- **Read-only.** Every tool is annotated `readOnlyHint: true`, only issues HTTP
+  GETs against the EFV dump files, and has no write, send, or filesystem capability.
+- **Egress allow-list.** An immutable `ALLOWED_HOSTS` frozenset + `assert_host_allowed()`
+  is enforced before every request (HTTPS-only, two fixed EFV hosts). URLs are
+  hardcoded constants; no user input builds a URL. See [`docs/network-egress.md`](docs/network-egress.md).
 - **TLS on.** httpx certificate verification is on by default and never disabled.
 - **No credentials.** The endpoints are public OGD; no API keys or secrets are
   stored or forwarded. A browser `User-Agent` is injected because the endpoints
   `403` the default httpx/curl UA (see Known limitations) — do not remove it.
+- **Error masking.** `mask_error_details=True` plus client-side masking keep raw
+  upstream/internal detail out of tool results; full detail goes only to the
+  structlog stderr log.
+- **Input bounds.** Tool arguments carry explicit Pydantic constraints (year
+  `1900–2100`, `level 1–8`, string `max_length`).
 - **Graceful degradation.** Retry with exponential backoff (2/4/8 s); a stale
   cache is served over an empty response; `dump_status` always returns a readable
   state and never a silent empty.
-- **Loopback by default.** SSE binds to `HOST`, default `127.0.0.1`; set
+- **Loopback + default-deny CORS.** SSE binds to `HOST`, default `127.0.0.1`; set
   `HOST=0.0.0.0` **only** inside a container (the provided [`Dockerfile`](Dockerfile) does).
+  Browser origins must be listed explicitly via `EFV_MCP_CORS_ORIGINS`.
+- **Audited.** Reviewed against the portfolio MCP best-practice catalogue
+  (44 applicable checks) — see [`audits/`](audits/) and [`SECURITY.md`](SECURITY.md).
+  Accepted risks are documented as ADRs under [`docs/adr/`](docs/adr/).
 - **Not authoritative.** Figures are not official; consult the EFV originals for
   official use.
 

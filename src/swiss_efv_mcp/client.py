@@ -21,8 +21,35 @@ import csv
 import io
 import time
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 import httpx
+
+from .logging_config import get_logger
+
+_log = get_logger(__name__)
+
+# --- Egress allow-list (SEC-021 / SEC-004) ----------------------------------
+# The server reaches exactly two EFV hosts. The allow-list is an immutable
+# module-level frozenset — not configurable or mutable at runtime — and is
+# asserted before every outbound request, so a bug or an injected URL can never
+# reach any other host. See docs/network-egress.md.
+ALLOWED_HOSTS = frozenset(
+    {
+        "www.data.finance.admin.ch",
+        "www.efv.admin.ch",
+    }
+)
+
+
+def assert_host_allowed(url: str) -> None:
+    """Reject non-HTTPS URLs and any host outside :data:`ALLOWED_HOSTS`."""
+    parts = urlsplit(url)
+    if parts.scheme != "https":
+        raise ValueError(f"Refusing non-HTTPS egress: {parts.scheme!r}")
+    if parts.hostname not in ALLOWED_HOSTS:
+        raise ValueError(f"Host not on egress allow-list: {parts.hostname!r}")
+
 
 # --- Attribution / provenance (portfolio standard) --------------------------
 
@@ -93,8 +120,28 @@ class EFVClient:
     backoff_base: float = 2.0  # tests set 0 for instant retries
     _cache: dict[str, _CacheEntry] = field(default_factory=dict)
     _last_error: dict[str, str] = field(default_factory=dict)
+    _http: httpx.AsyncClient | None = field(default=None, repr=False)
+
+    def _client(self) -> httpx.AsyncClient:
+        """Return a shared, lazily-created httpx client (SDK-001).
+
+        One connection pool is reused across all requests rather than opening a
+        fresh client per dump. Closed on shutdown via :meth:`aclose`.
+        """
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(
+                timeout=self.timeout, headers={"User-Agent": _UA}, follow_redirects=True
+            )
+        return self._http
+
+    async def aclose(self) -> None:
+        """Close the shared client. Wired to the FastMCP lifespan."""
+        if self._http is not None and not self._http.is_closed:
+            await self._http.aclose()
+        self._http = None
 
     async def _fetch_with_retry(self, http: httpx.AsyncClient, url: str) -> httpx.Response:
+        assert_host_allowed(url)  # SEC-021: enforce egress allow-list before any request
         last_error: Exception | None = None
         for attempt in range(4):
             if attempt > 0:
@@ -119,16 +166,19 @@ class EFVClient:
         if cached and (now - cached.fetched_at) < _CACHE_TTL_SECONDS:
             return cached.rows, "cached"
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers={"User-Agent": _UA}, follow_redirects=True
-        ) as http:
-            try:
-                resp = await self._fetch_with_retry(http, ds.url)
-            except Exception as exc:  # noqa: BLE001 — surfaced via status(), not raised blindly
-                self._last_error[key] = f"{type(exc).__name__}: {exc}"
-                if cached:  # stale-but-alive beats nothing
-                    return cached.rows, "cached"
-                raise
+        http = self._client()
+        try:
+            resp = await self._fetch_with_retry(http, ds.url)
+        except Exception as exc:  # noqa: BLE001 — surfaced via status(), not raised blindly
+            # OBS-002: log full detail to stderr; surface only a masked,
+            # model-safe message (exception *type*, no upstream body).
+            _log.warning(
+                "dump_fetch_failed", dataset=key, error_type=type(exc).__name__, exc_info=exc
+            )
+            self._last_error[key] = f"upstream fetch failed ({type(exc).__name__})"
+            if cached:  # stale-but-alive beats nothing
+                return cached.rows, "cached"
+            raise
 
         rows = list(csv.DictReader(io.StringIO(resp.text)))
         self._cache[key] = _CacheEntry(now, rows)

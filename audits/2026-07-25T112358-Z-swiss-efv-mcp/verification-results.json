@@ -1,0 +1,666 @@
+{
+  "audit_meta": {
+    "server_name": "swiss-efv-mcp",
+    "run_id": "2026-07-25T112358-Z-swiss-efv-mcp",
+    "audit_date": "2026-07-25",
+    "skill_version": "1.0.0",
+    "catalog_hash": "091f446b27965044ce658a1d5f4b2cabe2b0ab5661dcc1a53b6be8f1f2e093c0",
+    "applies_when_dsl_version": "1.0",
+    "policy": "fail-or-partial",
+    "note": "post-remediation re-audit; baseline run 2026-07-25T110724-Z-swiss-efv-mcp"
+  },
+  "results": {
+    "ARCH-001": {
+      "status": "pass",
+      "category": "ARCH",
+      "severity": "medium",
+      "evidence": [
+        "src/swiss_efv_mcp/server.py:190-248 — all 5 tools use one consistent snake_case convention (fiscal_headline, fiscal_budget_breakdown, fiscal_by_institution, fiscal_list_dimensions, dump_status); snake_case is explicitly 'akzeptabel' per pass criteria",
+        "src/swiss_efv_mcp/server.py:191-248 — no spaces, dots, parentheses or unicode in any tool name; names are function-name based via plain @mcp.tool()",
+        "src/swiss_efv_mcp/server.py:198-201,237-240 — docstring descriptions carry context/use-case, e.g. 'Use fiscal_list_dimensions to discover valid values' and 'Call this first to build correct parameters'"
+      ],
+      "gaps": [
+        "Minor naming inconsistency: four tools share a 'fiscal_' domain prefix while dump_status does not; not a convention break but a slight semantic outlier"
+      ]
+    },
+    "ARCH-002": {
+      "status": "partial",
+      "category": "ARCH",
+      "severity": "medium",
+      "evidence": [
+        "src/swiss_efv_mcp/server.py:198-247 — every tool docstring is a multi-line description well above the 100-char median threshold and includes parameter guidance and enum hints",
+        "src/swiss_efv_mcp/server.py:198-201 — fiscal_headline description names valid values ('saldo','einnahmen',...) and points to fiscal_list_dimensions (implicit use-case guidance)"
+      ],
+      "gaps": [
+        "No structured XML-style tags present anywhere: grep for <use_case>|<important_notes>|<example> in src/ returns nothing, so the ≥80%-use_case-tag criterion is unmet",
+        "Descriptions lack explicit <important_notes> for caveats (e.g. the 2022/2023 accounting-model seam is only surfaced at runtime via a 'note' field, not in the tool description)"
+      ]
+    },
+    "ARCH-003": {
+      "status": "partial",
+      "category": "ARCH",
+      "severity": "medium",
+      "evidence": [
+        "src/swiss_efv_mcp/server.py:71-73,148-153 — empty searches never return a bare [] or 'No results' string; they return a structured Pydantic envelope (HeadlineSeries/InstitutionSeries) carrying source+provenance even when points is empty",
+        "src/swiss_efv_mcp/server.py:237-241 + 156-172 — a dedicated fiscal_list_dimensions tool exists so the model can discover valid dimension values instead of guessing after an empty hit",
+        "src/swiss_efv_mcp/server.py:175-184,244-248 — dump_status is explicitly designed to 'never return empty silently' and reports degradation with an actionable retry hint"
+      ],
+      "gaps": [
+        "No match_type field (exact/fuzzy/none) on any search response — server.py:71-73 (headline) and 148-153 (institution) return empty points with no match_type marker",
+        "No fuzzy fallback or suggestion mechanism and no actionable per-tool 'note' on an empty result set; an empty fiscal_headline/fiscal_by_institution call yields empty points with no pointer back to fiscal_list_dimensions",
+        "budget_impl only sets a 'note' for the accounting-model seam (server.py:108-110), not for the zero-results case"
+      ]
+    },
+    "ARCH-004": {
+      "status": "pass",
+      "category": "ARCH",
+      "severity": "high",
+      "evidence": [
+        "src/swiss_efv_mcp/server.py:37-184 — all business logic lives in transport-agnostic *_impl(c: EFVClient, ...) functions; the @mcp.tool wrappers (190-248) are thin adapters that pass a module-level client via dependency injection",
+        "src/swiss_efv_mcp/server.py:191-248 — no tool handler touches request.headers / websocket / stdin / stdout; grep for transport internals in handlers returns nothing",
+        "src/swiss_efv_mcp/__main__.py:22-30 — dual transport selectable via TRANSPORT env var (stdio default; sse/streamable-http bind HOST:PORT); the same mcp instance and impl logic serve both transports"
+      ],
+      "gaps": [
+        "Configuration is read via direct os.environ.get calls in __main__.py:23-27 rather than a Pydantic BaseSettings object; functional and local (no global config vars) but not the recommended typed Settings pattern"
+      ]
+    },
+    "ARCH-005": {
+      "status": "pass",
+      "category": "ARCH",
+      "severity": "critical",
+      "evidence": [
+        "src/ — no hardcoded secrets: grep for (api_key|password|secret|token)=\"...\" assignments returns nothing; the only long string constant is a browser User-Agent (client.py:36-39), not a credential",
+        "SECURITY.md + README.md:184-186 — endpoints are public OGD; 'No credentials … no API keys or secrets are stored or forwarded'; no os.environ secret loading needed",
+        ".gitignore:6 — contains .env; Dockerfile:17 ENV sets only TRANSPORT (no secret baked into an image layer)"
+      ],
+      "gaps": [
+        "No CI secret-scanning step (gitleaks/trufflehog) in .github/workflows/ci.yml or publish.yml — the Modus 5 pass criterion is unmet, though the repo legitimately holds no secrets",
+        "No .env.example present (acceptable here since the server requires no secret env vars)"
+      ]
+    },
+    "ARCH-006": {
+      "status": "pass",
+      "category": "ARCH",
+      "severity": "high",
+      "evidence": [
+        "src/swiss_efv_mcp/server.py:190-248 — exactly 5 tools exposed, well under the ≤8 'in der Regel ok' threshold; no 1:1 REST-endpoint mapping",
+        "src/swiss_efv_mcp/server.py:8-12 + README.md:44 — documented anchor demo query is answerable in 2 tool calls (fiscal_headline + fiscal_budget_breakdown)",
+        "src/swiss_efv_mcp/server.py:156-172 — fiscal_list_dimensions aggregates three datasets into one discovery call rather than exposing per-dataset listing tools"
+      ],
+      "gaps": []
+    },
+    "ARCH-007": {
+      "status": "pass",
+      "category": "ARCH",
+      "severity": "medium",
+      "evidence": [
+        "src/swiss_efv_mcp/server.py:190-248 — tools return thought-complete envelopes (full time series, hierarchical breakdown, dimension inventory), never bare IDs requiring a follow-up detail call",
+        "src/swiss_efv_mcp/server.py:156-172 — dimensions_impl internally composes three separate dump loads (headline/budget/institutions) behind one atomic tool",
+        "src/swiss_efv_mcp/models.py:19-84 — every result is wrapped in an Envelope carrying source+provenance, so a single call yields a self-contained, explainable answer"
+      ],
+      "gaps": [
+        "dimensions_impl (server.py:157-159) loads the three datasets sequentially with separate awaits rather than asyncio.gather; parallelization would fit the 'wo Aggregation Sinn ergibt' criterion"
+      ]
+    },
+    "ARCH-008": {
+      "status": "pass",
+      "category": "ARCH",
+      "severity": "medium",
+      "evidence": [
+        "README.md:117-121 — documents the Tools-only decision with justification: EFV data has 'no stable resource hierarchy to expose as Resources, and there are no server-authored Prompts'",
+        "README.de.md:119-121 — same justification present in the German README (parity maintained)",
+        "src/swiss_efv_mcp/server.py — grep confirms no @mcp.resource / @mcp.prompt; the README-documented-justification branch of the pass criteria is satisfied"
+      ],
+      "gaps": [
+        "Only one of three primitives used; Resources/Prompts remain a Phase-2 opportunity (server explicitly defers this)"
+      ]
+    },
+    "ARCH-009": {
+      "status": "pass",
+      "category": "ARCH",
+      "severity": "high",
+      "evidence": [
+        "src/swiss_efv_mcp/server.py:190,207,221,236,244 — all 5 tools use bare @mcp.tool() with no annotations argument; grep for readOnlyHint|destructiveHint|idempotentHint|openWorldHint in src/ returns nothing",
+        "README.md:114-115 — read-only nature is stated in prose ('All tools are read-only by design') but is not encoded as machine-readable ToolAnnotations the host can consume",
+        "[remediated] server.py — ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True) on all 5 tools; tests/test_hardening.py asserts readOnlyHint per tool."
+      ],
+      "gaps": [
+        "No tool sets explicit annotations, so hosts must treat every call pessimistically (confirmation fatigue); the 'all tools have explicit annotations' criterion fails outright",
+        "Remediation: add annotations={'readOnlyHint': True, 'idempotentHint': True, 'openWorldHint': True} (tools do reach external EFV hosts) to all 5 read-only tools, and add an annotations overview table to the README"
+      ]
+    },
+    "ARCH-011": {
+      "status": "pass",
+      "category": "ARCH",
+      "severity": "medium",
+      "evidence": [
+        "Repo root — all mandatory top-level files present: README.md, README.de.md, CHANGELOG.md, LICENSE, pyproject.toml; mandatory dirs src/, tests/, .github/workflows/ all present",
+        "pyproject.toml:50-51 — correct src-layout ([tool.hatch.build.targets.wheel] packages = ['src/swiss_efv_mcp']); code lives under src/swiss_efv_mcp/ not a flat package",
+        ".github/workflows/ — both ci.yml (ruff + offline pytest on 3.11-3.13) and publish.yml present; README.md and README.de.md section inventories match (parity confirmed via grep '^## ')"
+      ],
+      "gaps": [
+        "server.py is 249 lines — slightly over the <200-line guideline — but it holds only 5 tools plus their testable *_impl bodies; the >5-tool 'tools/ package' rule does not trigger and the single-file choice is documented (README.md:119-121)"
+      ]
+    },
+    "ARCH-012": {
+      "status": "partial",
+      "category": "ARCH",
+      "severity": "medium",
+      "evidence": [
+        "CHANGELOG.md:1-6 — present and in Keep-a-Changelog format with SemVer reference; [Unreleased] and [0.1.0] sections maintained",
+        ".github/dependabot.yml:3-11 — monthly pip updates active (comment notes it keeps the mcp/fastmcp SDK current), satisfying the SDK-update-discipline criterion",
+        "README.md:222-228 — a dedicated 'MCP Protocol Version' section exists and notes protocol-relevant bumps go in CHANGELOG.md"
+      ],
+      "gaps": [
+        "protocolVersion is NOT explicitly pinned in code — grep for protocolVersion|protocol_version|PROTOCOL_VERSION in src/ returns nothing; README.md:224-228 states the version is 'negotiated at the initialize handshake by FastMCP' rather than pinned, which is exactly the Fail-Pattern (SDK default, can shift on update)",
+        "No documented Breaking-Change / compatibility-window policy tied to a specific spec version; CHANGELOG has no spec-version-bump entries yet (only 0.1.0)"
+      ]
+    },
+    "CH-004": {
+      "status": "pass",
+      "category": "CH",
+      "severity": "medium",
+      "evidence": [
+        "client.py:29-33 defines an `ATTRIBUTION` constant naming the provider and licence class: ‘Data: Eidgenoessische Finanzverwaltung EFV — opendata.swiss (OGD Schweiz, frei nutzbar). Private, non-affiliated project.’",
+        "models.py:19-21 `Envelope.source = Field(default=ATTRIBUTION)` and `provenance` are on every response model; models.py:6-8 docstring notes the source travels in the response (not the README), so attribution can never be dropped.",
+        "Every tool returns an Envelope-derived model via .model_dump() (server.py), so each tool answer carries `source` + `provenance`; StatusReport also carries `source` (models.py:84).",
+        "README.md:257-270 documents the data source and licensing: ‘EFV data remain subject to the OGD Schweiz terms (freely usable, with attribution)’ and Credits list EFV via opendata.swiss (OGD Schweiz, freely usable); README.de.md mirrors this."
+      ],
+      "gaps": [
+        "Attribution names the OGD Schweiz ‘frei nutzbar (mit Quellenangabe)’ terms rather than an explicit CC-code identifier (e.g. ‘CC BY 4.0’); there is no per-source licence table with a formal licence field, and no machine-readable `license` field on the envelope.",
+        "Single-source server (EFV only) so no multi-source provenance/licence-conflict concern applies.",
+        "Minor: could add the exact opendata.swiss terms URL and a licence code for full precision, but attribution obligation (provider + source named in every response and README) is met."
+      ]
+    },
+    "OBS-001": {
+      "status": "pass",
+      "category": "OBS",
+      "severity": "high",
+      "evidence": [
+        "src/swiss_efv_mcp/server.py:190-248 — all @mcp.tool wrappers just `return (...).model_dump()`; no try/except, so any exception bubbles to FastMCP and becomes a JSON-RPC protocol error",
+        "src/swiss_efv_mcp/client.py:114-136 — load() raises (line 131) when upstream is unreachable and no cache exists; an execution-level failure (Upstream unreachable) thus surfaces as a JSON-RPC error, not a tool result",
+        "grep across src/ for `isError`/`mask_error_details` returned no matches — no execution-error channel with isError:true anywhere",
+        "No standardized JSON-RPC error codes (-326xx / -320xx) used anywhere in src/",
+        "[remediated] server.py — FastMCP(mask_error_details=True): execution errors surface as isError tool-results without detail leak, protocol errors stay JSON-RPC; documented tests cover both the execution-error and unknown-tool paths."
+      ],
+      "gaps": [
+        "No separation of protocol vs execution errors: upstream/data failures propagate as JSON-RPC errors instead of tool-result with isError:true",
+        "LLM cannot distinguish 'connection broken' from 'try different parameters / retry later'",
+        "No standardized error-code constants; no documented test for execution-error vs protocol-error paths",
+        "Partial mitigation only: dump_status/StatusReport (server.py:175-184) offers a graceful-degradation health channel, and load() prefers stale cache over failing (client.py:129-130), but real tool failures still raise"
+      ]
+    },
+    "OBS-002": {
+      "status": "pass",
+      "category": "OBS",
+      "severity": "high",
+      "evidence": [
+        "src/swiss_efv_mcp/server.py:30 — `mcp = FastMCP(\"swiss-efv-mcp\")`; no `mask_error_details=True` set",
+        "src/swiss_efv_mcp/client.py:128 — `self._last_error[key] = f\"{type(exc).__name__}: {exc}\"` stores the raw upstream exception text",
+        "src/swiss_efv_mcp/client.py:147 + server.py:175-184 — that raw last_error string is returned through status()/StatusReport and reaches the model via the dump_status tool result",
+        "grep for `traceback|format_exc|sys.exc_info` across src/ returned no matches — no stacktrace leakage",
+        "No credentials/tokens in play (no auth); upstream URLs already public in code/README",
+        "[remediated] client.py — raw upstream exception text no longer surfaced; masked message 'upstream fetch failed (<Type>)' returned, full detail logged to stderr; test asserts no leak."
+      ],
+      "gaps": [
+        "mask_error_details is not enabled on the FastMCP instance (default behavior is version-dependent)",
+        "Raw upstream exception text (`{ExceptionType}: {message}`) is surfaced into the LLM context via dump_status rather than confined to a server log",
+        "Low actual disclosure severity (no stacktrace, no SQL, no secrets, read-only public data) but hygiene criteria not met"
+      ]
+    },
+    "OBS-003": {
+      "status": "pass",
+      "category": "OBS",
+      "severity": "medium",
+      "evidence": [
+        "pyproject.toml:26-30 — dependencies are only fastmcp, httpx, pydantic; no structlog/pino/loguru",
+        "grep for `import logging|structlog|loguru` across src/ returned no matches — no logging framework of any kind",
+        "No logger.info/warning/error calls, no JSON/logfmt output, no bound per-tool context (session_id/correlation_id) anywhere in src/",
+        "[remediated] logging_config.py — structlog JSON to stderr, idempotent configure_logging(); wired into client.py error path and __main__ startup."
+      ],
+      "gaps": [
+        "No structured logger dependency",
+        "No severity-level logging (RFC 5424) at all",
+        "No correlation-id / per-tool-call bound context — multi-step workflows not traceable"
+      ]
+    },
+    "OBS-004": {
+      "status": "pass",
+      "category": "OBS",
+      "severity": "critical",
+      "evidence": [
+        "grep for `print(` across src/ returned no matches — no print statements that could corrupt the stdio JSON-RPC stream",
+        "grep for `import logging|structlog|sys.stdout|StreamHandler` across src/ returned no matches — nothing writes to stdout besides the protocol stream",
+        "src/swiss_efv_mcp/__main__.py:22-30 — stdio path (`mcp.run(transport=\"stdio\")`) emits nothing to stdout by design",
+        "Dockerfile:19 — PYTHONUNBUFFERED=1 (SSE path only)"
+      ],
+      "gaps": [
+        "Compliant by absence: because there is zero logging/printing, stdout stays clean; if logging is ever added it must be explicitly routed to sys.stderr",
+        "No CI guard against future print() regressions (.github/workflows/ci.yml has no print-check step)"
+      ]
+    },
+    "OBS-006": {
+      "status": "fail",
+      "category": "OBS",
+      "severity": "medium",
+      "evidence": [
+        "grep for `opentelemetry|otel|start_as_current_span` across src/ returned no matches",
+        "pyproject.toml:26-30 — no opentelemetry-* packages in dependencies",
+        "No TracerProvider/OTLP exporter/HTTPX auto-instrumentation and no OTEL_* env config anywhere in repo (Dockerfile, README, workflows)"
+      ],
+      "gaps": [
+        "Cloud-deployable (Railway/Render) but no distributed tracing at all",
+        "No per-tool-call spans, no backend-latency child spans, no OTLP endpoint via env var",
+        "Slow-tool / user-behavior / backend-bottleneck forensics not possible"
+      ]
+    },
+    "OPS-001": {
+      "status": "partial",
+      "category": "OPS",
+      "severity": "high",
+      "evidence": [
+        "tests/test_client.py:1-3 imports respx and uses @respx.mock on 10 offline unit tests covering happy-path, NA-cleaning, year/household filter, 503-retry-recovery, timeout-raises, degraded-status, budget level filter, institution filter, dimensions-distinct, cache-hit.",
+        "tests/test_live.py:12 `pytestmark = pytest.mark.live` marks all live tests; run via `pytest -m live`.",
+        "pyproject.toml:55-57 registers the `live` marker; :32-38 dev extras include respx>=0.21, pytest, pytest-asyncio.",
+        ".github/workflows/ci.yml:30 runs `pytest tests/ -m \"not live\"` (live excluded) plus ruff, on Python 3.11/3.12/3.13."
+      ],
+      "gaps": [
+        "Per-tool live coverage incomplete: test_live.py exercises headline, dimensions, budget but NOT `fiscal_by_institution` (institution_impl) nor `dump_status` (status_impl).",
+        "Does not meet the check's ‘>=5 unit tests per tool’ bar (10 unit tests spread across 5 tools) — though core paths (happy/error/edge) are covered.",
+        "No separate nightly/scheduled live-test workflow (live runs are manual only); no coverage measurement (pytest-cov not a dev dep, no --cov in CI).",
+        "No auth/credentials to leak (public OGD) — the test-key concern is N/A here."
+      ]
+    },
+    "OPS-002": {
+      "status": "pass",
+      "category": "OPS",
+      "severity": "medium",
+      "evidence": [
+        "README.md contains all required sections: Anchor Demo Query (README.md:38-49, concrete NL query), Installation (:57-76), Available Tools (:104-116), Configuration (:88-102), Safety & Limits + Security (:177-194, :243-245), ASCII architecture diagram (:125-136 with box-drawing chars), Known limitations (:195-206, 6 limits >=3), License (:257-260), Contributing (:247-255).",
+        "README.de.md mirrors the same top-level sections (Übersicht, Funktionen, Anchor Demo Query, Konfiguration, Verfügbare Tools, Architektur, Sicherheit & Grenzen, Bekannte Einschränkungen, Projektphase, Lizenz, Mitwirken) — bilingual parity confirmed via header grep.",
+        "CHANGELOG.md:1-6 follows Keep-a-Changelog + SemVer with [Unreleased] and [0.1.0] releases and Added/Changed/Security/Known-findings sections.",
+        "CONTRIBUTING.md and CONTRIBUTING.de.md exist (referenced README.md:252)."
+      ],
+      "gaps": [
+        "Architecture is an ASCII diagram (accepted); no separate mermaid variant (not required).",
+        "Minor: Deprecated/Removed/Fixed changelog subsections not yet used (only Added/Changed/Security present so far — acceptable for early releases)."
+      ]
+    },
+    "OPS-003": {
+      "status": "partial",
+      "category": "OPS",
+      "severity": "high",
+      "evidence": [
+        "README.md:208-220 ‘Project Phase’ explicitly declares Phase 1 (read-only) with a status table (Phase 1 ✅ current, Phase 2 detail cubes planned, Phase 3 none planned) and states a re-audit is required before any write-capable tool.",
+        "Phase matches tool annotations: all five tools are read-only (README.md:114-116, 178-179 ‘Read-only by design’; server.py tools only call HTTP GET via client.load()); no destructive/write tools exist.",
+        "README.de.md:212 ‘Projektphase’ mirrors the phase declaration bilingually.",
+        "CHANGELOG references Phase-2 deferral of detail cubes (CHANGELOG.md:63-64)."
+      ],
+      "gaps": [
+        "No dedicated `docs/roadmap.md` file (docs/ directory does not exist); the roadmap lives only as an inline README table — the check's Modus 3 wants a roadmap file with phase-specific tasks.",
+        "Phase-1 prerequisite artifacts named in the check (ISDS-Klassifikation, DSG-Verarbeitungsverzeichnis, recorded audit-run) are not present/linked — though several are arguably N/A for a private non-governmental project over public data.",
+        "Core phase discipline (explicit declaration + read-only tool match) is satisfied; the formal roadmap-file and prerequisite-doc scaffolding is missing."
+      ]
+    },
+    "SCALE-001": {
+      "status": "pass",
+      "category": "SCALE",
+      "severity": "high",
+      "evidence": [
+        "src/swiss_efv_mcp/__main__.py:23-30 — ENV-based transport selection: `TRANSPORT` env var; stdio default, `sse`/`streamable-http` bind HOST:PORT and call mcp.run(transport=\"sse\")",
+        "Dockerfile:17-21 — container sets TRANSPORT=sse, HOST=0.0.0.0, PORT=8000 for cloud",
+        "README.md:98-101 — documented cloud invocation `TRANSPORT=sse PORT=8000 swiss-efv-mcp` (exposes /sse)",
+        "grep for websocket returned no matches — no legacy WebSocket transport"
+      ],
+      "gaps": [
+        "`streamable-http` is aliased to the SSE runner (mcp.run(transport=\"sse\")), so it serves SSE (/sse) rather than true Streamable HTTP (/mcp); acceptable per check (SSE is a permitted cloud transport) but the naming is slightly misleading",
+        "Runtime test not performed (endpoint is /sse, not /mcp); assessed via code review"
+      ]
+    },
+    "SCALE-002": {
+      "status": "partial",
+      "category": "SCALE",
+      "severity": "high",
+      "evidence": [
+        "src/swiss_efv_mcp/client.py:79-149 — per-instance in-memory TTL cache (`_cache`, 24h) and `_last_error`; module-level singleton client in server.py:31 — all session/data state lives in pod memory",
+        "grep for `redis|sticky|affinity|SessionStore|session_manager` across repo returned no matches — no shared-state session manager",
+        "No railway.toml / render.yaml / docker-compose.yml / k8s manifest present (ls of repo root) — no sticky-session LB configuration",
+        "[remediated] Accepted-risk documented in docs/adr/0002-scaling-and-deployment.md (single-instance; stateful LB deferred with explicit re-evaluation triggers)."
+      ],
+      "gaps": [
+        "Neither required pattern implemented: no edge-LB sticky sessions on Mcp-Session-Id, no Redis/shared-state session manager",
+        "Horizontal scaling (multiple replicas) would break FastMCP SSE sessions on pod switch and fragment the per-instance cache",
+        "No documented single-instance constraint to justify the absence"
+      ]
+    },
+    "SCALE-003": {
+      "status": "partial",
+      "category": "SCALE",
+      "severity": "high",
+      "evidence": [
+        "grep for `stick|hdr(Mcp-Session|affinity|upstream-hash` across repo returned no matches",
+        "No haproxy.cfg / nginx.conf / ingress*.yaml present anywhere in the repo (no deploy/ or helm/ directory)",
+        "No edge-LB layer exists to read the Mcp-Session-Id header",
+        "[remediated] Covered by docs/adr/0002 — Mcp-Session-Id edge routing deferred for the single-instance deployment; re-evaluation triggers documented."
+      ],
+      "gaps": [
+        "No Mcp-Session-Id header-based routing at any LB layer (complements the SCALE-002 gap)",
+        "If deployed with >1 replica behind a default LB, sessions would round-robin without affinity and collapse"
+      ]
+    },
+    "SCALE-004": {
+      "status": "pass",
+      "category": "SCALE",
+      "severity": "medium",
+      "evidence": [
+        "Dockerfile:4 and :10 — two FROM statements (multi-stage build); both use python:3.12-slim base",
+        "Dockerfile:4 — first stage named `AS build`; Dockerfile:10 — second (runtime) stage is NOT named",
+        "Dockerfile:11-14 — non-root user created (uid 10001) and `USER 10001` set",
+        "Dockerfile:8 — `pip install --no-cache-dir --prefix=/install`; Dockerfile:21 EXPOSE 8000",
+        "No HEALTHCHECK directive anywhere in the Dockerfile",
+        "[remediated] Dockerfile — named runtime stage + HEALTHCHECK probing the SSE port."
+      ],
+      "gaps": [
+        "No HEALTHCHECK directive — LB/orchestrator cannot verify container readiness",
+        "Runtime stage is unnamed (`AS runtime` missing) — minor; check calls for named stages",
+        "Final image size (<200 MB) not verified but plausible (slim base + 3 pure-Python deps)"
+      ]
+    },
+    "SCALE-006": {
+      "status": "fail",
+      "category": "SCALE",
+      "severity": "medium",
+      "evidence": [
+        "No k8s/helm manifest, no docker-compose.yml, no railway.toml/render.yaml present in repo (ls of root) — nowhere to set memory/cpu limits",
+        "Dockerfile has no `ulimit`/nofile configuration and no resource constraints",
+        "grep of README for memory/cpu/resource limits found no documented limits (README.md:90-102 lists only TRANSPORT/HOST/PORT)"
+      ],
+      "gaps": [
+        "No explicit memory limit, CPU limit, or FD limit defined or documented for the cloud deployment",
+        "Relevant here because the in-memory dump cache can grow (multiple CSVs, up to ~5 MB each) — an unbounded pod could OOM the host",
+        "No restart-policy / OOM-behavior documentation"
+      ]
+    },
+    "SDK-001": {
+      "status": "pass",
+      "category": "SDK",
+      "severity": "high",
+      "evidence": [
+        "server.py:16,30 imports `from fastmcp import FastMCP` and builds `mcp = FastMCP(\"swiss-efv-mcp\")` with NO `lifespan=` argument.",
+        "No `@asynccontextmanager` / lifespan function anywhere in src/ (grep for lifespan|asynccontextmanager returned no matches).",
+        "client.py:122-124 opens a FRESH `httpx.AsyncClient(...)` per `load()` call inside `async with` — the documented fail-pattern (new HTTP client per invocation, no lifespan-managed shared pool).",
+        "server.py:31 `client = EFVClient()` is a module-level global holding only a TTL row-cache; the httpx connection pool is created and torn down on every uncached fetch, and there is no server-lifecycle cleanup.",
+        "[remediated] client.py — shared lazily-created httpx.AsyncClient reused across loads (EFVClient._client) with aclose(), wired to the FastMCP lifespan in server.py; tests/test_hardening.py::test_client_is_reused_across_loads."
+      ],
+      "gaps": [
+        "No FastMCP lifespan (@asynccontextmanager) initialising a shared httpx.AsyncClient before first request and closing it after last.",
+        "httpx.AsyncClient is instantiated per load() rather than reused via server.state — no connection pooling across calls, leak-on-exception risk.",
+        "Mitigating factor: 24h in-memory TTL cache means not every tool call re-opens a client, but on cache-miss/expiry the anti-pattern applies fully.",
+        "Remediation: move httpx.AsyncClient into a lifespan and inject via ctx.fastmcp.state (or pass into EFVClient), close in finally."
+      ]
+    },
+    "SDK-002": {
+      "status": "partial",
+      "category": "SDK",
+      "severity": "medium",
+      "evidence": [
+        "pyproject.toml:29 pins `pydantic>=2.7` (Pydantic v2).",
+        "models.py:19-21 defines an `Envelope(BaseModel)` with `source` (default=ATTRIBUTION) + `provenance: Provenance` where `Provenance = Literal[\"dump\",\"cached\"]` (models.py:16) — consistent envelope, Literal enum, no mutable defaults (uses Field(default=...)).",
+        "All five response models (HeadlineSeries, BudgetBreakdown, InstitutionSeries, Dimensions extend Envelope; StatusReport carries source) are proper Pydantic v2 BaseModels with typed fields.",
+        "The *_impl functions have correct model return annotations (e.g. server.py:37-44 `-> HeadlineSeries`)."
+      ],
+      "gaps": [
+        "The @mcp.tool wrappers are annotated `-> dict` and return `.model_dump()` (server.py:197/204, 213/218, 227/233, 237/241, 245/248), so FastMCP receives a plain dict and does NOT expose the rich Pydantic output schema in tools/list — the model-level schema benefit is discarded at the tool boundary.",
+        "No `count` / `match_type` fields on search-style envelopes (minor; envelope has source+provenance+results-equivalent lists).",
+        "Remediation: annotate tools to return the Pydantic model directly (e.g. `-> HeadlineSeries`) and return the model instance instead of `.model_dump()`."
+      ]
+    },
+    "SDK-003": {
+      "status": "fail",
+      "category": "SDK",
+      "severity": "medium",
+      "evidence": [
+        "No `ctx: Context` parameter on any tool — grep for `Context|ctx` in src/ returned no matches.",
+        "No `ctx.info()` / `ctx.report_progress()` / `ctx.warning()` calls anywhere.",
+        "client.py:97-112 `_fetch_with_retry` sleeps `backoff_base**attempt` (2s, 4s, 8s in prod) across up to 4 attempts — a cold-cache fetch of the 5 MB budget file plus retries can exceed 2s, exactly the case the check flags for progress reporting."
+      ],
+      "gaps": [
+        "Tools performing network fetch + exponential-backoff retry (potential multi-second latency) provide no `ctx: Context` and emit no progress or log notifications to the client.",
+        "Upstream errors are swallowed into status() (client.py:127-131) rather than surfaced via ctx.warning()/ctx.error().",
+        "No print()/stdlib-logging misuse (neutral). Remediation: add `ctx: Context` to fetch-backed tools and emit ctx.info()/ctx.report_progress() around load()."
+      ]
+    },
+    "SDK-004": {
+      "status": "pass",
+      "category": "SDK",
+      "severity": "high",
+      "evidence": [
+        "Dual transport confirmed: __main__.py:25-28 runs `mcp.run(transport=\"sse\")` for TRANSPORT in {sse, streamable-http} — SDK-004 applies_when dual/HTTP-SSE is satisfied.",
+        "No CORS configuration anywhere: grep for CORS|cors|expose_headers|allow_origins in src/ returned no matches.",
+        "__main__.py only sets mcp.settings.host/port then calls mcp.run — no CORSMiddleware, no cors_expose_headers=[\"Mcp-Session-Id\"] passed to FastMCP.",
+        "server.py:30 `FastMCP(\"swiss-efv-mcp\")` receives no cors_origins / cors_expose_headers.",
+        "[remediated] __main__.py — SSE/HTTP served via mcp.http_app() with default-deny allowed_origins and CORSMiddleware exposing Mcp-Session-Id (EFV_MCP_CORS_ORIGINS)."
+      ],
+      "gaps": [
+        "`Access-Control-Expose-Headers: Mcp-Session-Id` is not configured, so browser-based cross-origin clients cannot read the session id and stateful SSE sessions break (server-side curl/stdio tests still pass — subtle failure).",
+        "No `allow_origins` allowlist (env-driven) for the SSE transport.",
+        "Note: default HOST=127.0.0.1 limits exposure, but the CORS gap remains whenever SSE is served to browser clients. Remediation: add CORSMiddleware with expose_headers/allow_headers including Mcp-Session-Id and an explicit ALLOWED_ORIGINS env list."
+      ]
+    },
+    "SEC-004": {
+      "status": "partial",
+      "category": "SEC",
+      "severity": "critical",
+      "evidence": [
+        "client.py:41-74 — all three dataset URLs are hardcoded module constants (https:// on data.finance.admin.ch / efv.admin.ch); no user input ever builds a URL, so the primary SSRF vector is structurally absent",
+        "client.py:122-123 — httpx.AsyncClient uses default TLS verification (never disabled) but follow_redirects=True",
+        "SECURITY.md:22 & README.md:180-182 — documents fixed hardcoded egress, 'no SSRF surface'",
+        "[remediated] client.py enforces https scheme + host allow-list before each request (improved); follow_redirects still on and no IP-literal blocklist — residual."
+      ],
+      "gaps": [
+        "No explicit HTTPS scheme validation before requests (no urlparse scheme check)",
+        "No resolved-IP blocklist (169.254.169.254, private/loopback/link-local ranges never checked)",
+        "No DNS pinning / getaddrinfo guard",
+        "follow_redirects=True means an upstream 3xx could redirect the fetch to an internal/metadata IP with no post-resolution IP check — residual SSRF-via-redirect gap"
+      ]
+    },
+    "SEC-005": {
+      "status": "partial",
+      "category": "SEC",
+      "severity": "high",
+      "evidence": [
+        "client.py:42,58,64,70 — hostnames are fixed trusted EFV constants, not user-controlled, so an attacker cannot introduce a rebinding domain",
+        "client.py:122-123 — httpx default client, no custom transport, no DNS pinning; follow_redirects=True",
+        "[remediated] Accepted-risk documented in docs/adr/0001-dns-pinning.md; no user-controlled host + egress allow-list neutralise the rebinding precondition."
+      ],
+      "gaps": [
+        "No DNS-Pinning: no getaddrinfo/ipaddress single-resolution logic (grep confirms neither symbol present in src/)",
+        "httpx default performs implicit resolution with no pinned-IP reuse (TOCTOU window exists in principle)",
+        "No SNI/Host-header preservation logic because no pinning implemented",
+        "follow_redirects=True could follow a redirect to a rebound host without re-validation"
+      ]
+    },
+    "SEC-006": {
+      "status": "pass",
+      "category": "SEC",
+      "severity": "high",
+      "evidence": [
+        "__main__.py:23 — transport = os.environ.get('TRANSPORT', 'stdio').lower(); default is stdio",
+        "__main__.py:25-30 — SSE/streamable-http only via explicit TRANSPORT env var; stdio path opens no port",
+        "README.md:78-102 — local stdio + Claude Desktop documented as primary use; cloud SSE documented separately with HOST guidance"
+      ],
+      "gaps": [
+        "Runtime port-open test not executed in this static audit (design strongly indicates no port on default start)"
+      ]
+    },
+    "SEC-007": {
+      "status": "partial",
+      "category": "SEC",
+      "severity": "high",
+      "evidence": [
+        "Dockerfile:12 — useradd --uid 10001 non-root user (UID >= 10000)",
+        "Dockerfile:14 — USER 10001 set before ENTRYPOINT",
+        "Dockerfile:4-10 — multi-stage build (build stage + slim runtime)"
+      ],
+      "gaps": [
+        "No readOnlyRootFilesystem (no k8s manifests / no runtime read-only enforcement)",
+        "No capabilities drop (CapDrop ALL) and no seccomp profile referenced",
+        "No Kubernetes SecurityContext (runAsNonRoot/allowPrivilegeEscalation:false) — no k8s/helm manifests in repo",
+        "No container security scan (Trivy/Snyk) step in CI"
+      ]
+    },
+    "SEC-008": {
+      "status": "pass",
+      "category": "SEC",
+      "severity": "medium",
+      "evidence": [
+        "pyproject.toml:1-3,40-41 — hatchling build backend, only a regular [project.scripts] entry point; no pre/postinstall hooks or custom cmdclass",
+        "README.md:59-76 — full untruncated install command (uvx swiss-efv-mcp / pip install) and complete claude_desktop_config.json shown transparently",
+        "publish.yml:37-55 — PyPI publish via OIDC (permissions id-token: write, environment pypi, pypa/gh-action-pypi-publish) = Trusted Publisher with Sigstore; CONTRIBUTING.md/PUBLISHING.md document the build/release process"
+      ],
+      "gaps": [
+        "README does not show an explicit end-user sigstore signature-verification snippet (optional)"
+      ]
+    },
+    "SEC-009": {
+      "status": "todo",
+      "category": "SEC",
+      "severity": "critical",
+      "evidence": [
+        "Server is no-auth public-open-data: no session-management, user-identity, or Mcp-Session-Id binding code anywhere in src/ (server.py has no auth/session logic)",
+        "SECURITY.md:38-40 — explicitly documents session crypto-binding as not applicable ('no user identity to bind, as the server exposes public data with no authentication')",
+        "SECURITY.md:53-56 — re-evaluation trigger: implement bound/TTL'd/server-invalidated session IDs if an auth model is ever added"
+      ],
+      "gaps": [
+        "No custom session binding implemented — structurally N/A because there is no auth model / user identity; FastMCP handles any transport session id internally. Needs manual confirmation that the documented N/A rationale is accepted for the dual-transport (SSE) deployment"
+      ]
+    },
+    "SEC-013": {
+      "status": "pass",
+      "category": "SEC",
+      "severity": "high",
+      "evidence": [
+        "No secrets/API keys anywhere: grep of src/ finds no KEY/SECRET/TOKEN env reads; endpoints are unauthenticated public OGD",
+        "SECURITY.md:24 — 'Unauthenticated public OGD — no API keys, tokens or secrets are stored or forwarded'; README.md:184-186 & CONTRIBUTING.md:15-16 confirm no credential handling",
+        "Dockerfile:1-22 — no secret ENV layers baked into image (only TRANSPORT/HOST/PORT/PYTHONUNBUFFERED)"
+      ],
+      "gaps": [
+        "None — the server uses zero credentials (best case; Stufe-1 documentation requirement is exceeded since there is no secret at all)"
+      ]
+    },
+    "SEC-014": {
+      "status": "todo",
+      "category": "SEC",
+      "severity": "medium",
+      "evidence": [
+        "Single standalone read-only server; no per-team tool allow-list config in repo (no gateway-config/allowlist files)",
+        "SECURITY.md:57-59 — tool allow-listing explicitly deferred to the MCP gateway/host layer ('enable the gateway's tool allow-listing') as an accepted portfolio-level control",
+        "No auth model exists, so server-side group/role checks are not applicable (no OAuth group claims)"
+      ],
+      "gaps": [
+        "Gateway-layer control, out of scope for a single no-auth server; needs manual portfolio-level judgment on whether a gateway with per-team allow-lists is deployed in front"
+      ]
+    },
+    "SEC-015": {
+      "status": "todo",
+      "category": "SEC",
+      "severity": "medium",
+      "evidence": [
+        "server.py:190-248 — all five tools are statically authored in-repo via @mcp.tool(); no dynamic or remote tool registration anywhere",
+        "SECURITY.md:36-41 — tool-poisoning detection documented as gateway/host responsibility; tool definitions are version-controlled, in-repo, PR-reviewed",
+        "No external MCP servers are aggregated by this server (single-server, own-tools-only → low residual risk per the check's own scoping)"
+      ],
+      "gaps": [
+        "No pre-flight poisoning detection layer (correctly a gateway responsibility, not a single-server one); needs manual judgment tied to whether untrusted external servers are ever integrated behind a shared gateway"
+      ]
+    },
+    "SEC-016": {
+      "status": "pass",
+      "category": "SEC",
+      "severity": "critical",
+      "evidence": [
+        "__main__.py:26 — mcp.settings.host = os.environ.get('HOST', '127.0.0.1'); loopback default, no 0.0.0.0 hardcoded in code",
+        "Dockerfile:16-18 — HOST=0.0.0.0 set explicitly and only in the container ENV (container-scoped opt-in)",
+        "README.md:95 & 190-191 and SECURITY.md:29 — document loopback default and that 0.0.0.0 is a container-only explicit opt-in (grep finds 0.0.0.0 only in Dockerfile, never in src/)"
+      ],
+      "gaps": [
+        "Optional runtime warning when binding 0.0.0.0 outside a container is not implemented (explicitly optional in the check)"
+      ]
+    },
+    "SEC-018": {
+      "status": "pass",
+      "category": "SEC",
+      "severity": "high",
+      "evidence": [
+        "server.py:191-248 — FastMCP derives an input schema from the typed signatures, so type-level validation exists (e.g. year_from: int | None is enforced as int; a non-int LLM value is rejected at the boundary)",
+        "server.py:191-233 — tool args (variable: str, household: str, level: int, contains: str|None) only filter already-cached in-memory rows; they never build a URL, reach a subprocess, or hit SQL (harmless sink)",
+        "models.py:19-88 — Pydantic v2 envelopes exist but are response models, not input-constraint schemas",
+        "[remediated] server.py — Annotated Field bounds on every tool arg (year ge/le 1900-2100, level ge/le 1-8, string max_length); settings.py port/ttl bounds."
+      ],
+      "gaps": [
+        "No numeric ge/le constraints on int args (level, year_from, year_to) — LLM can pass arbitrary/negative/huge ints",
+        "No str min_length/max_length or whitelist pattern on string args (variable, household, model, topic, contains, departement)",
+        "No Pydantic strict=True and no extra='forbid' on any input model",
+        "SECURITY.md:25 overstates this as full 'Pydantic v2 validation at all tool boundaries' — only type validation is present, not constraint validation"
+      ]
+    },
+    "SEC-019": {
+      "status": "pass",
+      "category": "SEC",
+      "severity": "critical",
+      "evidence": [
+        "server.py:190-248 & README.md:114-116 — all tools are read-only (HTTP GET only); no write, send, email, webhook, or filesystem capability (grep finds no smtplib/requests.post/httpx.post/slack/webhook)",
+        "Trifecta score ~1/3: private data ❌ (public OGD only), external send ❌ (read-only), untrusted content limited to fixed trusted EFV CSV hosts (client.py:41-74)",
+        "README.md:177-220 (Safety & Limits / Project Phase) and SECURITY.md:5,15-18 thoroughly document read-only-by-design and require re-audit before any write tool is added"
+      ],
+      "gaps": [
+        "No section explicitly titled 'Lethal Trifecta assessment' with the 3-capability table, though the substantive assessment is fully documented across README Safety & Limits + Project Phase"
+      ]
+    },
+    "SEC-020": {
+      "status": "pass",
+      "category": "SEC",
+      "severity": "critical",
+      "evidence": [
+        "grep across src/ finds no os.system, shell=True, eval(, exec(, os.popen, or subprocess — zero shell/subprocess/eval usage",
+        "client.py:97-136 — only httpx GET + csv.DictReader parsing; no external binary invocation",
+        "server.py:37-248 — pure in-memory row filtering; no filesystem or command construction from tool args"
+      ],
+      "gaps": [
+        "None"
+      ]
+    },
+    "SEC-021": {
+      "status": "pass",
+      "category": "SEC",
+      "severity": "high",
+      "evidence": [
+        "client.py:41-74 — egress is de-facto fixed to three hardcoded https constants on two EFV hosts; no user input can introduce a new host (stronger than a mutable allow-list in that dimension)",
+        "README.md:180-182 & SECURITY.md:22 — the two allowed EFV hosts and fixed-egress posture are documented",
+        "client.py:122-123 — single httpx client; TLS verification on",
+        "[remediated] client.py — ALLOWED_HOSTS frozenset + assert_host_allowed() enforced in _fetch_with_retry before every request; docs/network-egress.md; tests cover reject."
+      ],
+      "gaps": [
+        "No explicit code-layer allow-list: no frozenset ALLOWED_HOSTS and no assert_host_allowed() pre-request guard (grep finds neither)",
+        "No network-layer egress control (no k8s NetworkPolicy, no docs/network-egress.md, no security-group rules)",
+        "follow_redirects=True (client.py:123) permits a redirect to leave the fixed EFV hosts with no host re-check",
+        "No documented update procedure for changing the egress set"
+      ]
+    },
+    "SEC-022": {
+      "status": "partial",
+      "category": "SEC",
+      "severity": "high",
+      "evidence": [
+        "server.py:190-241 — 4 of 5 tools carry a topic prefix (fiscal_headline, fiscal_budget_breakdown, fiscal_by_institution, fiscal_list_dimensions), reducing collision risk",
+        "SECURITY.md:38-41 — tool definitions are version-controlled, authored in-repo, PR-reviewed, with no dynamic/remote registration (partial rug-pull mitigation)",
+        "server.py:245 — dump_status has no prefix at all; no server-identity namespace (e.g. swiss_efv__) is used"
+      ],
+      "gaps": [
+        "No server-identity namespace prefix: 'fiscal_' is a topic prefix, not a <server>__ identity prefix, and is inconsistent (dump_status unprefixed) — cross-server shadowing not structurally prevented",
+        "No tool-definition hash snapshot generated at release: publish.yml has no sha256/tool-hashes.json step (grep of CHANGELOG/server.json finds no hash/namespace mention)",
+        "No CHANGELOG discipline for tool-definition changes / re-approval hints"
+      ]
+    }
+  }
+}

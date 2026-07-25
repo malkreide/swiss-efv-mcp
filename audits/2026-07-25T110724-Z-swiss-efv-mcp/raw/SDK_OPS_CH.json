@@ -1,0 +1,130 @@
+{
+  "SDK-001": {
+    "status": "fail",
+    "category": "SDK",
+    "severity": "high",
+    "evidence": [
+      "server.py:16,30 imports `from fastmcp import FastMCP` and builds `mcp = FastMCP(\"swiss-efv-mcp\")` with NO `lifespan=` argument.",
+      "No `@asynccontextmanager` / lifespan function anywhere in src/ (grep for lifespan|asynccontextmanager returned no matches).",
+      "client.py:122-124 opens a FRESH `httpx.AsyncClient(...)` per `load()` call inside `async with` — the documented fail-pattern (new HTTP client per invocation, no lifespan-managed shared pool).",
+      "server.py:31 `client = EFVClient()` is a module-level global holding only a TTL row-cache; the httpx connection pool is created and torn down on every uncached fetch, and there is no server-lifecycle cleanup."
+    ],
+    "gaps": [
+      "No FastMCP lifespan (@asynccontextmanager) initialising a shared httpx.AsyncClient before first request and closing it after last.",
+      "httpx.AsyncClient is instantiated per load() rather than reused via server.state — no connection pooling across calls, leak-on-exception risk.",
+      "Mitigating factor: 24h in-memory TTL cache means not every tool call re-opens a client, but on cache-miss/expiry the anti-pattern applies fully.",
+      "Remediation: move httpx.AsyncClient into a lifespan and inject via ctx.fastmcp.state (or pass into EFVClient), close in finally."
+    ]
+  },
+  "SDK-002": {
+    "status": "partial",
+    "category": "SDK",
+    "severity": "medium",
+    "evidence": [
+      "pyproject.toml:29 pins `pydantic>=2.7` (Pydantic v2).",
+      "models.py:19-21 defines an `Envelope(BaseModel)` with `source` (default=ATTRIBUTION) + `provenance: Provenance` where `Provenance = Literal[\"dump\",\"cached\"]` (models.py:16) — consistent envelope, Literal enum, no mutable defaults (uses Field(default=...)).",
+      "All five response models (HeadlineSeries, BudgetBreakdown, InstitutionSeries, Dimensions extend Envelope; StatusReport carries source) are proper Pydantic v2 BaseModels with typed fields.",
+      "The *_impl functions have correct model return annotations (e.g. server.py:37-44 `-> HeadlineSeries`)."
+    ],
+    "gaps": [
+      "The @mcp.tool wrappers are annotated `-> dict` and return `.model_dump()` (server.py:197/204, 213/218, 227/233, 237/241, 245/248), so FastMCP receives a plain dict and does NOT expose the rich Pydantic output schema in tools/list — the model-level schema benefit is discarded at the tool boundary.",
+      "No `count` / `match_type` fields on search-style envelopes (minor; envelope has source+provenance+results-equivalent lists).",
+      "Remediation: annotate tools to return the Pydantic model directly (e.g. `-> HeadlineSeries`) and return the model instance instead of `.model_dump()`."
+    ]
+  },
+  "SDK-003": {
+    "status": "fail",
+    "category": "SDK",
+    "severity": "medium",
+    "evidence": [
+      "No `ctx: Context` parameter on any tool — grep for `Context|ctx` in src/ returned no matches.",
+      "No `ctx.info()` / `ctx.report_progress()` / `ctx.warning()` calls anywhere.",
+      "client.py:97-112 `_fetch_with_retry` sleeps `backoff_base**attempt` (2s, 4s, 8s in prod) across up to 4 attempts — a cold-cache fetch of the 5 MB budget file plus retries can exceed 2s, exactly the case the check flags for progress reporting."
+    ],
+    "gaps": [
+      "Tools performing network fetch + exponential-backoff retry (potential multi-second latency) provide no `ctx: Context` and emit no progress or log notifications to the client.",
+      "Upstream errors are swallowed into status() (client.py:127-131) rather than surfaced via ctx.warning()/ctx.error().",
+      "No print()/stdlib-logging misuse (neutral). Remediation: add `ctx: Context` to fetch-backed tools and emit ctx.info()/ctx.report_progress() around load()."
+    ]
+  },
+  "SDK-004": {
+    "status": "fail",
+    "category": "SDK",
+    "severity": "high",
+    "evidence": [
+      "Dual transport confirmed: __main__.py:25-28 runs `mcp.run(transport=\"sse\")` for TRANSPORT in {sse, streamable-http} — SDK-004 applies_when dual/HTTP-SSE is satisfied.",
+      "No CORS configuration anywhere: grep for CORS|cors|expose_headers|allow_origins in src/ returned no matches.",
+      "__main__.py only sets mcp.settings.host/port then calls mcp.run — no CORSMiddleware, no cors_expose_headers=[\"Mcp-Session-Id\"] passed to FastMCP.",
+      "server.py:30 `FastMCP(\"swiss-efv-mcp\")` receives no cors_origins / cors_expose_headers."
+    ],
+    "gaps": [
+      "`Access-Control-Expose-Headers: Mcp-Session-Id` is not configured, so browser-based cross-origin clients cannot read the session id and stateful SSE sessions break (server-side curl/stdio tests still pass — subtle failure).",
+      "No `allow_origins` allowlist (env-driven) for the SSE transport.",
+      "Note: default HOST=127.0.0.1 limits exposure, but the CORS gap remains whenever SSE is served to browser clients. Remediation: add CORSMiddleware with expose_headers/allow_headers including Mcp-Session-Id and an explicit ALLOWED_ORIGINS env list."
+    ]
+  },
+  "OPS-001": {
+    "status": "partial",
+    "category": "OPS",
+    "severity": "high",
+    "evidence": [
+      "tests/test_client.py:1-3 imports respx and uses @respx.mock on 10 offline unit tests covering happy-path, NA-cleaning, year/household filter, 503-retry-recovery, timeout-raises, degraded-status, budget level filter, institution filter, dimensions-distinct, cache-hit.",
+      "tests/test_live.py:12 `pytestmark = pytest.mark.live` marks all live tests; run via `pytest -m live`.",
+      "pyproject.toml:55-57 registers the `live` marker; :32-38 dev extras include respx>=0.21, pytest, pytest-asyncio.",
+      ".github/workflows/ci.yml:30 runs `pytest tests/ -m \"not live\"` (live excluded) plus ruff, on Python 3.11/3.12/3.13."
+    ],
+    "gaps": [
+      "Per-tool live coverage incomplete: test_live.py exercises headline, dimensions, budget but NOT `fiscal_by_institution` (institution_impl) nor `dump_status` (status_impl).",
+      "Does not meet the check's ‘>=5 unit tests per tool’ bar (10 unit tests spread across 5 tools) — though core paths (happy/error/edge) are covered.",
+      "No separate nightly/scheduled live-test workflow (live runs are manual only); no coverage measurement (pytest-cov not a dev dep, no --cov in CI).",
+      "No auth/credentials to leak (public OGD) — the test-key concern is N/A here."
+    ]
+  },
+  "OPS-002": {
+    "status": "pass",
+    "category": "OPS",
+    "severity": "medium",
+    "evidence": [
+      "README.md contains all required sections: Anchor Demo Query (README.md:38-49, concrete NL query), Installation (:57-76), Available Tools (:104-116), Configuration (:88-102), Safety & Limits + Security (:177-194, :243-245), ASCII architecture diagram (:125-136 with box-drawing chars), Known limitations (:195-206, 6 limits >=3), License (:257-260), Contributing (:247-255).",
+      "README.de.md mirrors the same top-level sections (Übersicht, Funktionen, Anchor Demo Query, Konfiguration, Verfügbare Tools, Architektur, Sicherheit & Grenzen, Bekannte Einschränkungen, Projektphase, Lizenz, Mitwirken) — bilingual parity confirmed via header grep.",
+      "CHANGELOG.md:1-6 follows Keep-a-Changelog + SemVer with [Unreleased] and [0.1.0] releases and Added/Changed/Security/Known-findings sections.",
+      "CONTRIBUTING.md and CONTRIBUTING.de.md exist (referenced README.md:252)."
+    ],
+    "gaps": [
+      "Architecture is an ASCII diagram (accepted); no separate mermaid variant (not required).",
+      "Minor: Deprecated/Removed/Fixed changelog subsections not yet used (only Added/Changed/Security present so far — acceptable for early releases)."
+    ]
+  },
+  "OPS-003": {
+    "status": "partial",
+    "category": "OPS",
+    "severity": "high",
+    "evidence": [
+      "README.md:208-220 ‘Project Phase’ explicitly declares Phase 1 (read-only) with a status table (Phase 1 ✅ current, Phase 2 detail cubes planned, Phase 3 none planned) and states a re-audit is required before any write-capable tool.",
+      "Phase matches tool annotations: all five tools are read-only (README.md:114-116, 178-179 ‘Read-only by design’; server.py tools only call HTTP GET via client.load()); no destructive/write tools exist.",
+      "README.de.md:212 ‘Projektphase’ mirrors the phase declaration bilingually.",
+      "CHANGELOG references Phase-2 deferral of detail cubes (CHANGELOG.md:63-64)."
+    ],
+    "gaps": [
+      "No dedicated `docs/roadmap.md` file (docs/ directory does not exist); the roadmap lives only as an inline README table — the check's Modus 3 wants a roadmap file with phase-specific tasks.",
+      "Phase-1 prerequisite artifacts named in the check (ISDS-Klassifikation, DSG-Verarbeitungsverzeichnis, recorded audit-run) are not present/linked — though several are arguably N/A for a private non-governmental project over public data.",
+      "Core phase discipline (explicit declaration + read-only tool match) is satisfied; the formal roadmap-file and prerequisite-doc scaffolding is missing."
+    ]
+  },
+  "CH-004": {
+    "status": "pass",
+    "category": "CH",
+    "severity": "medium",
+    "evidence": [
+      "client.py:29-33 defines an `ATTRIBUTION` constant naming the provider and licence class: ‘Data: Eidgenoessische Finanzverwaltung EFV — opendata.swiss (OGD Schweiz, frei nutzbar). Private, non-affiliated project.’",
+      "models.py:19-21 `Envelope.source = Field(default=ATTRIBUTION)` and `provenance` are on every response model; models.py:6-8 docstring notes the source travels in the response (not the README), so attribution can never be dropped.",
+      "Every tool returns an Envelope-derived model via .model_dump() (server.py), so each tool answer carries `source` + `provenance`; StatusReport also carries `source` (models.py:84).",
+      "README.md:257-270 documents the data source and licensing: ‘EFV data remain subject to the OGD Schweiz terms (freely usable, with attribution)’ and Credits list EFV via opendata.swiss (OGD Schweiz, freely usable); README.de.md mirrors this."
+    ],
+    "gaps": [
+      "Attribution names the OGD Schweiz ‘frei nutzbar (mit Quellenangabe)’ terms rather than an explicit CC-code identifier (e.g. ‘CC BY 4.0’); there is no per-source licence table with a formal licence field, and no machine-readable `license` field on the envelope.",
+      "Single-source server (EFV only) so no multi-source provenance/licence-conflict concern applies.",
+      "Minor: could add the exact opendata.swiss terms URL and a licence code for full precision, but attribution obligation (provider + source named in every response and README) is met."
+    ]
+  }
+}

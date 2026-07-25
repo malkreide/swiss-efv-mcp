@@ -88,14 +88,18 @@ PYTHONPATH=src python -m swiss_efv_mcp
 
 ## Konfiguration
 
-Die gesamte Konfiguration erfolgt über Umgebungsvariablen. Die Defaults sind für
-den lokalen Gebrauch sicher.
+Die Konfiguration wird einmalig in ein typisiertes `Settings`-Objekt geladen
+(`pydantic-settings`). Die unten genannten Legacy-Namen funktionieren weiter; die
+kanonischen Namen nutzen das `EFV_MCP_`-Präfix. Die Defaults sind für den lokalen
+Gebrauch sicher.
 
 | Variable    | Default     | Zweck                                                                       |
 |-------------|-------------|-----------------------------------------------------------------------------|
 | `TRANSPORT` | `stdio`     | Transport: `stdio` (Claude Desktop) oder `sse` / `streamable-http` (Cloud)  |
 | `HOST`      | `127.0.0.1` | Bind-Host (nur SSE). Loopback als Default; `0.0.0.0` **nur** im Container setzen |
 | `PORT`      | `8000`      | Bind-Port (nur SSE)                                                         |
+| `EFV_MCP_LOG_LEVEL`    | `INFO` | structlog-Level (JSON auf stderr)                                 |
+| `EFV_MCP_CORS_ORIGINS` | `[]`   | Nur SSE: explizit erlaubte Browser-Origins (Default-Deny; kommasepariert oder JSON) |
 
 Cloud (Render / Railway):
 
@@ -113,8 +117,9 @@ TRANSPORT=sse PORT=8000 swiss-efv-mcp   # exponiert /sse
 | `fiscal_list_dimensions` | Gültige Parameterwerte entdecken — zuerst aufrufen, um korrekte Argumente zu bilden |
 | `dump_status` | Cache-Aktualität und Upstream-Zustand pro Datensatz; liefert nie stillschweigend leer |
 
-Alle Tools sind **read-only by design**: Sie stellen nur HTTP-GETs an die
-EFV-Dump-Files und haben keine Schreib-, Sende- oder Dateisystem-Fähigkeit.
+Alle Tools sind **read-only**: jedes ist mit `readOnlyHint: true`,
+`destructiveHint: false` annotiert, stellt nur HTTP-GETs an die EFV-Dump-Files
+und hat keine Schreib-, Sende- oder Dateisystem-Fähigkeit.
 
 **MCP-Primitives.** Dieser Server nutzt nur das **Tools**-Primitive. Die
 EFV-Daten werden live aus gecachten Dumps geschnitten; es gibt keine stabile
@@ -163,36 +168,50 @@ Konsequenzen:
 swiss-efv-mcp/
 ├── src/swiss_efv_mcp/
 │   ├── __init__.py
-│   ├── __main__.py    # Entry-Point; duales Transport (stdio / SSE)
-│   ├── client.py      # Dump-first-Datenschicht: Retry, UA, NA-Cleaning, TTL-Cache
-│   ├── models.py      # Pydantic-v2-Envelopes (source + provenance)
-│   └── server.py      # 5 FastMCP-Tools + testbare *_impl-Funktionen
-├── tests/             # respx-Mock-Tests + @pytest.mark.live
-├── README.md
-├── README.de.md
-├── CHANGELOG.md
-├── LICENSE
+│   ├── __main__.py        # Entry-Point; duales Transport (stdio / SSE+CORS)
+│   ├── client.py          # Dump-first-Datenschicht: Egress-Allowlist, Retry, UA, TTL-Cache
+│   ├── logging_config.py  # structlog JSON auf stderr
+│   ├── models.py          # Pydantic-v2-Envelopes (source + provenance)
+│   ├── server.py          # 5 FastMCP-Tools (annotiert) + testbare *_impl-Funktionen
+│   └── settings.py        # typisierte pydantic-settings-Konfig
+├── tests/                 # respx-Mock-Tests + Härtungs-Tests + @pytest.mark.live
+├── docs/                  # network-egress.md + Accepted-Risk-ADRs
+├── audits/                # MCP-Best-Practice-Audit-Runs (Findings, Report, Summary)
+├── README.md · README.de.md · CHANGELOG.md · SECURITY.md · CONTRIBUTING.md
+├── Dockerfile · server.json · LICENSE
 └── pyproject.toml
 ```
 
 ## Sicherheit & Grenzen
 
-- **Read-only by design.** Jedes Tool stellt nur HTTP-GETs an die EFV-Dump-Files;
-  es gibt keine Schreib-, Sende- oder Dateisystem-Fähigkeiten.
-- **Fixer Egress.** Die Datensatz-URLs sind fest kodierte Konstanten auf zwei
-  EFV-Hosts (`data.finance.admin.ch`, `efv.admin.ch`); kein Nutzer-Input gelangt
-  je in eine URL, daher gibt es keine SSRF-Angriffsfläche.
+- **Read-only.** Jedes Tool ist mit `readOnlyHint: true` annotiert, stellt nur
+  HTTP-GETs an die EFV-Dump-Files und hat keine Schreib-, Sende- oder
+  Dateisystem-Fähigkeit.
+- **Egress-Allowlist.** Ein unveränderliches `ALLOWED_HOSTS`-frozenset +
+  `assert_host_allowed()` wird vor jeder Anfrage erzwungen (nur HTTPS, zwei feste
+  EFV-Hosts). URLs sind fest kodiert; kein Nutzer-Input baut eine URL. Siehe
+  [`docs/network-egress.md`](docs/network-egress.md).
 - **TLS aktiv.** Die httpx-Zertifikatsprüfung ist standardmässig aktiv und wird im
   Code nie deaktiviert.
 - **Keine Secrets.** Die Endpoints sind öffentliches OGD; es werden keine
   API-Keys oder Secrets gespeichert oder weitergereicht. Ein Browser-`User-Agent`
   wird injiziert, weil die Endpoints den Default-httpx/curl-UA mit `403` abweisen
   (siehe Bekannte Einschränkungen) — nicht entfernen.
+- **Fehlermaskierung.** `mask_error_details=True` plus client-seitige Maskierung
+  halten rohes Upstream-/Interndetail aus den Tool-Results; das Detail geht nur
+  ins structlog-stderr-Log.
+- **Input-Bounds.** Tool-Argumente tragen explizite Pydantic-Constraints (Jahr
+  `1900–2100`, `level 1–8`, String-`max_length`).
 - **Graceful Degradation.** Retry mit exponentiellem Backoff (2/4/8 s); ein
   veralteter Cache wird einer leeren Antwort vorgezogen; `dump_status` liefert
   immer einen auswertbaren Zustand und nie ein stilles Leer.
-- **Loopback als Default.** SSE bindet an `HOST`, Default `127.0.0.1`; `HOST=0.0.0.0`
-  **nur** im Container setzen (das mitgelieferte [`Dockerfile`](Dockerfile) tut das).
+- **Loopback + Default-Deny-CORS.** SSE bindet an `HOST`, Default `127.0.0.1`;
+  `HOST=0.0.0.0` **nur** im Container setzen (das mitgelieferte
+  [`Dockerfile`](Dockerfile) tut das). Browser-Origins müssen via
+  `EFV_MCP_CORS_ORIGINS` explizit gelistet werden.
+- **Auditiert.** Geprüft gegen den Portfolio-MCP-Best-Practice-Katalog
+  (44 anwendbare Checks) — siehe [`audits/`](audits/) und [`SECURITY.md`](SECURITY.md).
+  Akzeptierte Risiken sind als ADRs unter [`docs/adr/`](docs/adr/) dokumentiert.
 - **Nicht amtlich.** Die Zahlen sind nicht amtlich — für den offiziellen Gebrauch
   die EFV-Originale konsultieren.
 
