@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
+import ipaddress
 import time
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
@@ -43,12 +44,28 @@ ALLOWED_HOSTS = frozenset(
 
 
 def assert_host_allowed(url: str) -> None:
-    """Reject non-HTTPS URLs and any host outside :data:`ALLOWED_HOSTS`."""
+    """Reject non-HTTPS URLs, IP-literal hosts, and any host outside
+    :data:`ALLOWED_HOSTS` (SEC-004 / SEC-021).
+
+    Called before every request *and* on the final URL after redirects, so a
+    redirect can never smuggle egress to a disallowed host.
+    """
     parts = urlsplit(url)
     if parts.scheme != "https":
         raise ValueError(f"Refusing non-HTTPS egress: {parts.scheme!r}")
-    if parts.hostname not in ALLOWED_HOSTS:
-        raise ValueError(f"Host not on egress allow-list: {parts.hostname!r}")
+    host = parts.hostname
+    if host is None:
+        raise ValueError("Refusing egress to a URL without a host")
+    # No IP literals — the allow-list is hostname-based; an IP literal would be
+    # a sign of DNS-rebinding or a crafted URL.
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass  # not an IP literal — good
+    else:
+        raise ValueError(f"Refusing egress to an IP literal: {host!r}")
+    if host not in ALLOWED_HOSTS:
+        raise ValueError(f"Host not on egress allow-list: {host!r}")
 
 
 # --- Attribution / provenance (portfolio standard) --------------------------
@@ -148,6 +165,8 @@ class EFVClient:
                 await asyncio.sleep(self.backoff_base**attempt)  # 2s, 4s, 8s in prod
             try:
                 resp = await http.get(url)
+                # SEC-004: a redirect must not smuggle egress off the allow-list.
+                assert_host_allowed(str(resp.url))
                 resp.raise_for_status()
                 return resp
             except (httpx.HTTPStatusError, httpx.RequestError) as exc:

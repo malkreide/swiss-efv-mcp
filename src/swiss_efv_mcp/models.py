@@ -40,6 +40,10 @@ class HeadlineSeries(Envelope):
     model: str = Field(description="fs (Finanzstatistik) | gfs (GFS-Modell)")
     unit: str = "CHF mio / % (variable-dependent)"
     points: list[Point]
+    note: str | None = Field(
+        default=None,
+        description="guidance when the result is empty or has a caveat (ARCH-003)",
+    )
 
 
 class BreakdownItem(BaseModel):
@@ -69,6 +73,10 @@ class InstitutionSeries(Envelope):
     filter_departement: str | None
     filter_variable: str | None
     points: list[InstitutionPoint]
+    note: str | None = Field(
+        default=None,
+        description="guidance when the result is empty or has a caveat (ARCH-003)",
+    )
 
 
 class Dimensions(Envelope):
