@@ -1,0 +1,115 @@
+{
+  "audit_meta": {
+    "server_name": "swiss-efv-mcp",
+    "run_id": "2026-07-25T155850-Z-swiss-efv-mcp",
+    "audit_date": "2026-07-25",
+    "skill_version": "1.0.0",
+    "catalog_hash": "091f446b27965044ce658a1d5f4b2cabe2b0ab5661dcc1a53b6be8f1f2e093c0",
+    "applies_when_dsl_version": "1.0",
+    "policy": "fail-or-partial",
+    "note": "v0.3.0 deferrable-fix bundle; prior run 2026-07-25T150447-Z-swiss-efv-mcp"
+  },
+  "totals": {
+    "checks_evaluated": 44,
+    "applicable": 44,
+    "by_status": {
+      "pass": 38,
+      "fail": 0,
+      "partial": 3,
+      "todo": 3,
+      "n/a": 0
+    },
+    "by_severity_among_findings": {
+      "critical": 0,
+      "high": 3,
+      "medium": 0,
+      "low": 0
+    },
+    "by_category": {
+      "ARCH": {
+        "pass": 11,
+        "fail": 0,
+        "partial": 0,
+        "todo": 0,
+        "n/a": 0
+      },
+      "CH": {
+        "pass": 1,
+        "fail": 0,
+        "partial": 0,
+        "todo": 0,
+        "n/a": 0
+      },
+      "OBS": {
+        "pass": 5,
+        "fail": 0,
+        "partial": 0,
+        "todo": 0,
+        "n/a": 0
+      },
+      "OPS": {
+        "pass": 3,
+        "fail": 0,
+        "partial": 0,
+        "todo": 0,
+        "n/a": 0
+      },
+      "SCALE": {
+        "pass": 3,
+        "fail": 0,
+        "partial": 2,
+        "todo": 0,
+        "n/a": 0
+      },
+      "SDK": {
+        "pass": 4,
+        "fail": 0,
+        "partial": 0,
+        "todo": 0,
+        "n/a": 0
+      },
+      "SEC": {
+        "pass": 11,
+        "fail": 0,
+        "partial": 1,
+        "todo": 3,
+        "n/a": 0
+      }
+    }
+  },
+  "findings": {
+    "policy": "fail-or-partial",
+    "policy_statuses": [
+      "fail",
+      "partial"
+    ],
+    "expected_count": 3,
+    "expected_ids": [
+      "SCALE-002",
+      "SCALE-003",
+      "SEC-005"
+    ],
+    "details": [
+      {
+        "check_id": "SCALE-002",
+        "category": "SCALE",
+        "severity": "high",
+        "status": "partial"
+      },
+      {
+        "check_id": "SCALE-003",
+        "category": "SCALE",
+        "severity": "high",
+        "status": "partial"
+      },
+      {
+        "check_id": "SEC-005",
+        "category": "SEC",
+        "severity": "high",
+        "status": "partial"
+      }
+    ]
+  },
+  "production_ready": true,
+  "blocking_findings": []
+}

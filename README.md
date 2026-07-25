@@ -3,7 +3,7 @@
 
 # 🏛️ swiss-efv-mcp
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](CHANGELOG.md)
 [![CI](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
@@ -114,7 +114,8 @@ TRANSPORT=sse PORT=8000 swiss-efv-mcp   # exposes /sse
 | `fiscal_budget_breakdown` | Hierarchical federal budget by topic (Ausgaben nach Art / nach Aufgabengebiet, Einnahmen, Bilanz, …) |
 | `fiscal_by_institution` | Spending per department / administrative unit since 2007 (Personalausgaben, Informatik, external services, FTE) |
 | `fiscal_list_dimensions` | Discover valid parameter values — call this first to build correct arguments |
-| `dump_status` | Cache freshness and upstream health per dataset; never returns empty silently |
+| `fiscal_status` | Cache freshness and upstream health per dataset; never returns empty silently |
+| `dump_status` | **Deprecated** alias of `fiscal_status` (kept for backward compatibility; removed in a future minor) |
 
 All tools are **read-only**: each is annotated `readOnlyHint: true`,
 `destructiveHint: false`, only issues HTTP GETs against the EFV dump files, and
@@ -240,7 +241,10 @@ tool is added.
 
 The protocol version is negotiated at the `initialize` handshake by
 [FastMCP](https://pypi.org/project/fastmcp/) (pinned `fastmcp>=3.4` in
-`pyproject.toml`), which builds on the `mcp` Python SDK. Dependencies are kept
+`pyproject.toml`), which builds on the `mcp` Python SDK. The baseline this server
+is built and audited against is **`2025-11-25`**, pinned as `MCP_PROTOCOL_VERSION`
+in `server.py`; a regression test asserts the negotiated version still equals it,
+so a protocol-changing SDK bump fails CI loudly (ARCH-012). Dependencies are kept
 current via monthly Dependabot PRs (`.github/dependabot.yml`); protocol-relevant
 bumps are noted in [`CHANGELOG.md`](CHANGELOG.md).
 

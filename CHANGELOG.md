@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-25
+
+Medium-findings audit backlog worked through — 0 failing checks; the three
+remaining findings are accepted-risk ADR-documented deferrals (SCALE-002,
+SCALE-003, SEC-005). See the audit runs under `audits/`.
+
 ### Added
+- **ARCH-012:** the MCP protocol baseline (`2025-11-25`) is pinned as
+  `MCP_PROTOCOL_VERSION` in `server.py`, with a regression test that fails CI if
+  a SDK bump changes the negotiated version.
+- **SEC-022:** `dump_status` renamed to `fiscal_status` so every tool shares the
+  `fiscal_` server-identity namespace; `dump_status` is kept as a documented
+  deprecated alias (removed in a future minor). Tool-hash pinning is documented
+  as a gateway responsibility in `SECURITY.md`.
+- **SCALE-003:** ADR 0002 gains a concrete `Mcp-Session-Id` sticky-session
+  example (nginx / Ingress / Traefik) for the multi-replica case.
+- **SEC-005:** `docs/network-egress.md` prescribes the network-layer egress
+  mitigation (default-deny NetworkPolicy / egress-proxy allow-list) that
+  supersedes application-level DNS pinning.
 - **SDK-002:** tools now return typed Pydantic models, so FastMCP exposes an
   output schema and structured content for every tool.
 - **SDK-003:** `Context` injection — tools emit debug logs and `fiscal_list_dimensions`
