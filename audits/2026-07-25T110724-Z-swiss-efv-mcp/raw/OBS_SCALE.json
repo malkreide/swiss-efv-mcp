@@ -1,0 +1,157 @@
+{
+  "OBS-001": {
+    "status": "fail",
+    "category": "OBS",
+    "severity": "high",
+    "evidence": [
+      "src/swiss_efv_mcp/server.py:190-248 — all @mcp.tool wrappers just `return (...).model_dump()`; no try/except, so any exception bubbles to FastMCP and becomes a JSON-RPC protocol error",
+      "src/swiss_efv_mcp/client.py:114-136 — load() raises (line 131) when upstream is unreachable and no cache exists; an execution-level failure (Upstream unreachable) thus surfaces as a JSON-RPC error, not a tool result",
+      "grep across src/ for `isError`/`mask_error_details` returned no matches — no execution-error channel with isError:true anywhere",
+      "No standardized JSON-RPC error codes (-326xx / -320xx) used anywhere in src/"
+    ],
+    "gaps": [
+      "No separation of protocol vs execution errors: upstream/data failures propagate as JSON-RPC errors instead of tool-result with isError:true",
+      "LLM cannot distinguish 'connection broken' from 'try different parameters / retry later'",
+      "No standardized error-code constants; no documented test for execution-error vs protocol-error paths",
+      "Partial mitigation only: dump_status/StatusReport (server.py:175-184) offers a graceful-degradation health channel, and load() prefers stale cache over failing (client.py:129-130), but real tool failures still raise"
+    ]
+  },
+  "OBS-002": {
+    "status": "partial",
+    "category": "OBS",
+    "severity": "high",
+    "evidence": [
+      "src/swiss_efv_mcp/server.py:30 — `mcp = FastMCP(\"swiss-efv-mcp\")`; no `mask_error_details=True` set",
+      "src/swiss_efv_mcp/client.py:128 — `self._last_error[key] = f\"{type(exc).__name__}: {exc}\"` stores the raw upstream exception text",
+      "src/swiss_efv_mcp/client.py:147 + server.py:175-184 — that raw last_error string is returned through status()/StatusReport and reaches the model via the dump_status tool result",
+      "grep for `traceback|format_exc|sys.exc_info` across src/ returned no matches — no stacktrace leakage",
+      "No credentials/tokens in play (no auth); upstream URLs already public in code/README"
+    ],
+    "gaps": [
+      "mask_error_details is not enabled on the FastMCP instance (default behavior is version-dependent)",
+      "Raw upstream exception text (`{ExceptionType}: {message}`) is surfaced into the LLM context via dump_status rather than confined to a server log",
+      "Low actual disclosure severity (no stacktrace, no SQL, no secrets, read-only public data) but hygiene criteria not met"
+    ]
+  },
+  "OBS-003": {
+    "status": "fail",
+    "category": "OBS",
+    "severity": "medium",
+    "evidence": [
+      "pyproject.toml:26-30 — dependencies are only fastmcp, httpx, pydantic; no structlog/pino/loguru",
+      "grep for `import logging|structlog|loguru` across src/ returned no matches — no logging framework of any kind",
+      "No logger.info/warning/error calls, no JSON/logfmt output, no bound per-tool context (session_id/correlation_id) anywhere in src/"
+    ],
+    "gaps": [
+      "No structured logger dependency",
+      "No severity-level logging (RFC 5424) at all",
+      "No correlation-id / per-tool-call bound context — multi-step workflows not traceable"
+    ]
+  },
+  "OBS-004": {
+    "status": "pass",
+    "category": "OBS",
+    "severity": "critical",
+    "evidence": [
+      "grep for `print(` across src/ returned no matches — no print statements that could corrupt the stdio JSON-RPC stream",
+      "grep for `import logging|structlog|sys.stdout|StreamHandler` across src/ returned no matches — nothing writes to stdout besides the protocol stream",
+      "src/swiss_efv_mcp/__main__.py:22-30 — stdio path (`mcp.run(transport=\"stdio\")`) emits nothing to stdout by design",
+      "Dockerfile:19 — PYTHONUNBUFFERED=1 (SSE path only)"
+    ],
+    "gaps": [
+      "Compliant by absence: because there is zero logging/printing, stdout stays clean; if logging is ever added it must be explicitly routed to sys.stderr",
+      "No CI guard against future print() regressions (.github/workflows/ci.yml has no print-check step)"
+    ]
+  },
+  "OBS-006": {
+    "status": "fail",
+    "category": "OBS",
+    "severity": "medium",
+    "evidence": [
+      "grep for `opentelemetry|otel|start_as_current_span` across src/ returned no matches",
+      "pyproject.toml:26-30 — no opentelemetry-* packages in dependencies",
+      "No TracerProvider/OTLP exporter/HTTPX auto-instrumentation and no OTEL_* env config anywhere in repo (Dockerfile, README, workflows)"
+    ],
+    "gaps": [
+      "Cloud-deployable (Railway/Render) but no distributed tracing at all",
+      "No per-tool-call spans, no backend-latency child spans, no OTLP endpoint via env var",
+      "Slow-tool / user-behavior / backend-bottleneck forensics not possible"
+    ]
+  },
+  "SCALE-001": {
+    "status": "pass",
+    "category": "SCALE",
+    "severity": "high",
+    "evidence": [
+      "src/swiss_efv_mcp/__main__.py:23-30 — ENV-based transport selection: `TRANSPORT` env var; stdio default, `sse`/`streamable-http` bind HOST:PORT and call mcp.run(transport=\"sse\")",
+      "Dockerfile:17-21 — container sets TRANSPORT=sse, HOST=0.0.0.0, PORT=8000 for cloud",
+      "README.md:98-101 — documented cloud invocation `TRANSPORT=sse PORT=8000 swiss-efv-mcp` (exposes /sse)",
+      "grep for websocket returned no matches — no legacy WebSocket transport"
+    ],
+    "gaps": [
+      "`streamable-http` is aliased to the SSE runner (mcp.run(transport=\"sse\")), so it serves SSE (/sse) rather than true Streamable HTTP (/mcp); acceptable per check (SSE is a permitted cloud transport) but the naming is slightly misleading",
+      "Runtime test not performed (endpoint is /sse, not /mcp); assessed via code review"
+    ]
+  },
+  "SCALE-002": {
+    "status": "fail",
+    "category": "SCALE",
+    "severity": "high",
+    "evidence": [
+      "src/swiss_efv_mcp/client.py:79-149 — per-instance in-memory TTL cache (`_cache`, 24h) and `_last_error`; module-level singleton client in server.py:31 — all session/data state lives in pod memory",
+      "grep for `redis|sticky|affinity|SessionStore|session_manager` across repo returned no matches — no shared-state session manager",
+      "No railway.toml / render.yaml / docker-compose.yml / k8s manifest present (ls of repo root) — no sticky-session LB configuration"
+    ],
+    "gaps": [
+      "Neither required pattern implemented: no edge-LB sticky sessions on Mcp-Session-Id, no Redis/shared-state session manager",
+      "Horizontal scaling (multiple replicas) would break FastMCP SSE sessions on pod switch and fragment the per-instance cache",
+      "No documented single-instance constraint to justify the absence"
+    ]
+  },
+  "SCALE-003": {
+    "status": "fail",
+    "category": "SCALE",
+    "severity": "high",
+    "evidence": [
+      "grep for `stick|hdr(Mcp-Session|affinity|upstream-hash` across repo returned no matches",
+      "No haproxy.cfg / nginx.conf / ingress*.yaml present anywhere in the repo (no deploy/ or helm/ directory)",
+      "No edge-LB layer exists to read the Mcp-Session-Id header"
+    ],
+    "gaps": [
+      "No Mcp-Session-Id header-based routing at any LB layer (complements the SCALE-002 gap)",
+      "If deployed with >1 replica behind a default LB, sessions would round-robin without affinity and collapse"
+    ]
+  },
+  "SCALE-004": {
+    "status": "partial",
+    "category": "SCALE",
+    "severity": "medium",
+    "evidence": [
+      "Dockerfile:4 and :10 — two FROM statements (multi-stage build); both use python:3.12-slim base",
+      "Dockerfile:4 — first stage named `AS build`; Dockerfile:10 — second (runtime) stage is NOT named",
+      "Dockerfile:11-14 — non-root user created (uid 10001) and `USER 10001` set",
+      "Dockerfile:8 — `pip install --no-cache-dir --prefix=/install`; Dockerfile:21 EXPOSE 8000",
+      "No HEALTHCHECK directive anywhere in the Dockerfile"
+    ],
+    "gaps": [
+      "No HEALTHCHECK directive — LB/orchestrator cannot verify container readiness",
+      "Runtime stage is unnamed (`AS runtime` missing) — minor; check calls for named stages",
+      "Final image size (<200 MB) not verified but plausible (slim base + 3 pure-Python deps)"
+    ]
+  },
+  "SCALE-006": {
+    "status": "fail",
+    "category": "SCALE",
+    "severity": "medium",
+    "evidence": [
+      "No k8s/helm manifest, no docker-compose.yml, no railway.toml/render.yaml present in repo (ls of root) — nowhere to set memory/cpu limits",
+      "Dockerfile has no `ulimit`/nofile configuration and no resource constraints",
+      "grep of README for memory/cpu/resource limits found no documented limits (README.md:90-102 lists only TRANSPORT/HOST/PORT)"
+    ],
+    "gaps": [
+      "No explicit memory limit, CPU limit, or FD limit defined or documented for the cloud deployment",
+      "Relevant here because the in-memory dump cache can grow (multiple CSVs, up to ~5 MB each) — an unbounded pod could OOM the host",
+      "No restart-policy / OOM-behavior documentation"
+    ]
+  }
+}

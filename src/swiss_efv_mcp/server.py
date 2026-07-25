@@ -13,7 +13,12 @@ Anchor demo query:
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from typing import Annotated
+
 from fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from .client import EFVClient, clean, is_projection, to_float, to_year
 from .models import (
@@ -27,8 +32,32 @@ from .models import (
     StatusReport,
 )
 
-mcp = FastMCP("swiss-efv-mcp")
 client = EFVClient()
+
+
+@asynccontextmanager
+async def _lifespan(_server: FastMCP):
+    """Own the shared HTTP client; close it cleanly on shutdown (SDK-001)."""
+    try:
+        yield
+    finally:
+        await client.aclose()
+
+
+# `mask_error_details=True` keeps upstream/internal error text out of tool
+# results (OBS-002); execution errors surface as `isError` tool-results while
+# protocol errors stay JSON-RPC errors (OBS-001).
+mcp = FastMCP("swiss-efv-mcp", lifespan=_lifespan, mask_error_details=True)
+
+# Every tool is read-only: it only issues HTTP GETs against the EFV dumps and
+# never writes. `openWorldHint` is True because responses depend on external
+# upstream data (ARCH-009).
+_READONLY = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=True,
+)
 
 
 # --- pure implementations (testable) ----------------------------------------
@@ -187,13 +216,13 @@ def status_impl(c: EFVClient) -> StatusReport:
 # --- MCP tool wrappers ------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READONLY)
 async def fiscal_headline(
-    variable: str,
-    household: str = "bund",
-    model: str = "fs",
-    year_from: int | None = None,
-    year_to: int | None = None,
+    variable: Annotated[str, Field(max_length=100)],
+    household: Annotated[str, Field(max_length=40)] = "bund",
+    model: Annotated[str, Field(max_length=20)] = "fs",
+    year_from: Annotated[int | None, Field(ge=1900, le=2100)] = None,
+    year_to: Annotated[int | None, Field(ge=1900, le=2100)] = None,
 ) -> dict:
     """Headline fiscal time series (revenue, expenditure, balance, debt ratios,
     forecasts to 2029). variable e.g. 'saldo', 'einnahmen', 'ausgaben',
@@ -204,12 +233,12 @@ async def fiscal_headline(
     ).model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READONLY)
 async def fiscal_budget_breakdown(
-    topic: str = "Ausgaben nach Aufgabengebiet",
-    year: int | None = None,
-    level: int = 2,
-    contains: str | None = None,
+    topic: Annotated[str, Field(max_length=120)] = "Ausgaben nach Aufgabengebiet",
+    year: Annotated[int | None, Field(ge=1900, le=2100)] = None,
+    level: Annotated[int, Field(ge=1, le=8)] = 2,
+    contains: Annotated[str | None, Field(max_length=120)] = None,
 ) -> dict:
     """Hierarchical federal-budget breakdown for one topic and year. topic e.g.
     'Ausgaben nach Aufgabengebiet', 'Ausgaben nach Art', 'Einnahmen'. level is
@@ -218,12 +247,12 @@ async def fiscal_budget_breakdown(
     return (await budget_impl(client, topic, year, level, contains)).model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READONLY)
 async def fiscal_by_institution(
-    departement: str | None = None,
-    variable: str = "Personalausgaben",
-    year_from: int | None = None,
-    year_to: int | None = None,
+    departement: Annotated[str | None, Field(max_length=120)] = None,
+    variable: Annotated[str, Field(max_length=80)] = "Personalausgaben",
+    year_from: Annotated[int | None, Field(ge=1900, le=2100)] = None,
+    year_to: Annotated[int | None, Field(ge=1900, le=2100)] = None,
 ) -> dict:
     """Federal spending by department / administrative unit since 2007. variable
     one of: 'Personalausgaben', 'Informatik', 'Beratung und externe
@@ -233,7 +262,7 @@ async def fiscal_by_institution(
     ).model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READONLY)
 async def fiscal_list_dimensions() -> dict:
     """List the valid dimension values across all datasets (variables,
     households, models, budget topics, departments). Call this first to build
@@ -241,7 +270,7 @@ async def fiscal_list_dimensions() -> dict:
     return (await dimensions_impl(client)).model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READONLY)
 async def dump_status() -> dict:
     """Report cache freshness and upstream health per dataset. Never returns
     empty silently — used for graceful degradation."""

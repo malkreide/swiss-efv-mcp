@@ -1,0 +1,147 @@
+{
+  "ARCH-001": {
+    "status": "pass",
+    "category": "ARCH",
+    "severity": "medium",
+    "evidence": [
+      "src/swiss_efv_mcp/server.py:190-248 — all 5 tools use one consistent snake_case convention (fiscal_headline, fiscal_budget_breakdown, fiscal_by_institution, fiscal_list_dimensions, dump_status); snake_case is explicitly 'akzeptabel' per pass criteria",
+      "src/swiss_efv_mcp/server.py:191-248 — no spaces, dots, parentheses or unicode in any tool name; names are function-name based via plain @mcp.tool()",
+      "src/swiss_efv_mcp/server.py:198-201,237-240 — docstring descriptions carry context/use-case, e.g. 'Use fiscal_list_dimensions to discover valid values' and 'Call this first to build correct parameters'"
+    ],
+    "gaps": [
+      "Minor naming inconsistency: four tools share a 'fiscal_' domain prefix while dump_status does not; not a convention break but a slight semantic outlier"
+    ]
+  },
+  "ARCH-002": {
+    "status": "partial",
+    "category": "ARCH",
+    "severity": "medium",
+    "evidence": [
+      "src/swiss_efv_mcp/server.py:198-247 — every tool docstring is a multi-line description well above the 100-char median threshold and includes parameter guidance and enum hints",
+      "src/swiss_efv_mcp/server.py:198-201 — fiscal_headline description names valid values ('saldo','einnahmen',...) and points to fiscal_list_dimensions (implicit use-case guidance)"
+    ],
+    "gaps": [
+      "No structured XML-style tags present anywhere: grep for <use_case>|<important_notes>|<example> in src/ returns nothing, so the ≥80%-use_case-tag criterion is unmet",
+      "Descriptions lack explicit <important_notes> for caveats (e.g. the 2022/2023 accounting-model seam is only surfaced at runtime via a 'note' field, not in the tool description)"
+    ]
+  },
+  "ARCH-003": {
+    "status": "partial",
+    "category": "ARCH",
+    "severity": "medium",
+    "evidence": [
+      "src/swiss_efv_mcp/server.py:71-73,148-153 — empty searches never return a bare [] or 'No results' string; they return a structured Pydantic envelope (HeadlineSeries/InstitutionSeries) carrying source+provenance even when points is empty",
+      "src/swiss_efv_mcp/server.py:237-241 + 156-172 — a dedicated fiscal_list_dimensions tool exists so the model can discover valid dimension values instead of guessing after an empty hit",
+      "src/swiss_efv_mcp/server.py:175-184,244-248 — dump_status is explicitly designed to 'never return empty silently' and reports degradation with an actionable retry hint"
+    ],
+    "gaps": [
+      "No match_type field (exact/fuzzy/none) on any search response — server.py:71-73 (headline) and 148-153 (institution) return empty points with no match_type marker",
+      "No fuzzy fallback or suggestion mechanism and no actionable per-tool 'note' on an empty result set; an empty fiscal_headline/fiscal_by_institution call yields empty points with no pointer back to fiscal_list_dimensions",
+      "budget_impl only sets a 'note' for the accounting-model seam (server.py:108-110), not for the zero-results case"
+    ]
+  },
+  "ARCH-004": {
+    "status": "pass",
+    "category": "ARCH",
+    "severity": "high",
+    "evidence": [
+      "src/swiss_efv_mcp/server.py:37-184 — all business logic lives in transport-agnostic *_impl(c: EFVClient, ...) functions; the @mcp.tool wrappers (190-248) are thin adapters that pass a module-level client via dependency injection",
+      "src/swiss_efv_mcp/server.py:191-248 — no tool handler touches request.headers / websocket / stdin / stdout; grep for transport internals in handlers returns nothing",
+      "src/swiss_efv_mcp/__main__.py:22-30 — dual transport selectable via TRANSPORT env var (stdio default; sse/streamable-http bind HOST:PORT); the same mcp instance and impl logic serve both transports"
+    ],
+    "gaps": [
+      "Configuration is read via direct os.environ.get calls in __main__.py:23-27 rather than a Pydantic BaseSettings object; functional and local (no global config vars) but not the recommended typed Settings pattern"
+    ]
+  },
+  "ARCH-005": {
+    "status": "pass",
+    "category": "ARCH",
+    "severity": "critical",
+    "evidence": [
+      "src/ — no hardcoded secrets: grep for (api_key|password|secret|token)=\"...\" assignments returns nothing; the only long string constant is a browser User-Agent (client.py:36-39), not a credential",
+      "SECURITY.md + README.md:184-186 — endpoints are public OGD; 'No credentials … no API keys or secrets are stored or forwarded'; no os.environ secret loading needed",
+      ".gitignore:6 — contains .env; Dockerfile:17 ENV sets only TRANSPORT (no secret baked into an image layer)"
+    ],
+    "gaps": [
+      "No CI secret-scanning step (gitleaks/trufflehog) in .github/workflows/ci.yml or publish.yml — the Modus 5 pass criterion is unmet, though the repo legitimately holds no secrets",
+      "No .env.example present (acceptable here since the server requires no secret env vars)"
+    ]
+  },
+  "ARCH-006": {
+    "status": "pass",
+    "category": "ARCH",
+    "severity": "high",
+    "evidence": [
+      "src/swiss_efv_mcp/server.py:190-248 — exactly 5 tools exposed, well under the ≤8 'in der Regel ok' threshold; no 1:1 REST-endpoint mapping",
+      "src/swiss_efv_mcp/server.py:8-12 + README.md:44 — documented anchor demo query is answerable in 2 tool calls (fiscal_headline + fiscal_budget_breakdown)",
+      "src/swiss_efv_mcp/server.py:156-172 — fiscal_list_dimensions aggregates three datasets into one discovery call rather than exposing per-dataset listing tools"
+    ],
+    "gaps": []
+  },
+  "ARCH-007": {
+    "status": "pass",
+    "category": "ARCH",
+    "severity": "medium",
+    "evidence": [
+      "src/swiss_efv_mcp/server.py:190-248 — tools return thought-complete envelopes (full time series, hierarchical breakdown, dimension inventory), never bare IDs requiring a follow-up detail call",
+      "src/swiss_efv_mcp/server.py:156-172 — dimensions_impl internally composes three separate dump loads (headline/budget/institutions) behind one atomic tool",
+      "src/swiss_efv_mcp/models.py:19-84 — every result is wrapped in an Envelope carrying source+provenance, so a single call yields a self-contained, explainable answer"
+    ],
+    "gaps": [
+      "dimensions_impl (server.py:157-159) loads the three datasets sequentially with separate awaits rather than asyncio.gather; parallelization would fit the 'wo Aggregation Sinn ergibt' criterion"
+    ]
+  },
+  "ARCH-008": {
+    "status": "pass",
+    "category": "ARCH",
+    "severity": "medium",
+    "evidence": [
+      "README.md:117-121 — documents the Tools-only decision with justification: EFV data has 'no stable resource hierarchy to expose as Resources, and there are no server-authored Prompts'",
+      "README.de.md:119-121 — same justification present in the German README (parity maintained)",
+      "src/swiss_efv_mcp/server.py — grep confirms no @mcp.resource / @mcp.prompt; the README-documented-justification branch of the pass criteria is satisfied"
+    ],
+    "gaps": [
+      "Only one of three primitives used; Resources/Prompts remain a Phase-2 opportunity (server explicitly defers this)"
+    ]
+  },
+  "ARCH-009": {
+    "status": "fail",
+    "category": "ARCH",
+    "severity": "high",
+    "evidence": [
+      "src/swiss_efv_mcp/server.py:190,207,221,236,244 — all 5 tools use bare @mcp.tool() with no annotations argument; grep for readOnlyHint|destructiveHint|idempotentHint|openWorldHint in src/ returns nothing",
+      "README.md:114-115 — read-only nature is stated in prose ('All tools are read-only by design') but is not encoded as machine-readable ToolAnnotations the host can consume"
+    ],
+    "gaps": [
+      "No tool sets explicit annotations, so hosts must treat every call pessimistically (confirmation fatigue); the 'all tools have explicit annotations' criterion fails outright",
+      "Remediation: add annotations={'readOnlyHint': True, 'idempotentHint': True, 'openWorldHint': True} (tools do reach external EFV hosts) to all 5 read-only tools, and add an annotations overview table to the README"
+    ]
+  },
+  "ARCH-011": {
+    "status": "pass",
+    "category": "ARCH",
+    "severity": "medium",
+    "evidence": [
+      "Repo root — all mandatory top-level files present: README.md, README.de.md, CHANGELOG.md, LICENSE, pyproject.toml; mandatory dirs src/, tests/, .github/workflows/ all present",
+      "pyproject.toml:50-51 — correct src-layout ([tool.hatch.build.targets.wheel] packages = ['src/swiss_efv_mcp']); code lives under src/swiss_efv_mcp/ not a flat package",
+      ".github/workflows/ — both ci.yml (ruff + offline pytest on 3.11-3.13) and publish.yml present; README.md and README.de.md section inventories match (parity confirmed via grep '^## ')"
+    ],
+    "gaps": [
+      "server.py is 249 lines — slightly over the <200-line guideline — but it holds only 5 tools plus their testable *_impl bodies; the >5-tool 'tools/ package' rule does not trigger and the single-file choice is documented (README.md:119-121)"
+    ]
+  },
+  "ARCH-012": {
+    "status": "partial",
+    "category": "ARCH",
+    "severity": "medium",
+    "evidence": [
+      "CHANGELOG.md:1-6 — present and in Keep-a-Changelog format with SemVer reference; [Unreleased] and [0.1.0] sections maintained",
+      ".github/dependabot.yml:3-11 — monthly pip updates active (comment notes it keeps the mcp/fastmcp SDK current), satisfying the SDK-update-discipline criterion",
+      "README.md:222-228 — a dedicated 'MCP Protocol Version' section exists and notes protocol-relevant bumps go in CHANGELOG.md"
+    ],
+    "gaps": [
+      "protocolVersion is NOT explicitly pinned in code — grep for protocolVersion|protocol_version|PROTOCOL_VERSION in src/ returns nothing; README.md:224-228 states the version is 'negotiated at the initialize handshake by FastMCP' rather than pinned, which is exactly the Fail-Pattern (SDK default, can shift on update)",
+      "No documented Breaking-Change / compatibility-window policy tied to a specific spec version; CHANGELOG has no spec-version-bump entries yet (only 0.1.0)"
+    ]
+  }
+}

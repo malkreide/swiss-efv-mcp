@@ -19,16 +19,36 @@ EFV-Dump-Files auf zwei festen Hosts (`data.finance.admin.ch`, `efv.admin.ch`);
 es gibt keine Schreib-, Sende- oder Dateisystem-Fähigkeiten, und es werden keine
 Personendaten verarbeitet.
 
+Diese Posture wurde gegen den Portfolio-MCP-Best-Practice-Katalog geprüft
+(44 anwendbare Checks) — siehe [`audits/`](audits/). Die untenstehende Härtung
+schliesst den Audit-Backlog; der Lauf ist aus der gespeicherten
+`verification-results.json` reproduzierbar.
+
 | Bereich | Kontrolle |
 |---|---|
-| Egress | Die Datensatz-URLs sind fest kodierte Konstanten auf zwei EFV-Hosts; kein Nutzer-Input gelangt in eine Anfrage, daher keine SSRF-Angriffsfläche |
+| Egress | Code-Layer-Allow-List: ein modulweites `frozenset` `ALLOWED_HOSTS` + `assert_host_allowed()` vor **jeder** Anfrage weist Nicht-HTTPS und jeden Host ausserhalb der Liste ab. URLs sind fest kodiert; kein Nutzer-Input baut eine URL. Siehe [`docs/network-egress.md`](docs/network-egress.md). (SEC-021) |
 | TLS | httpx-Zertifikatsprüfung standardmässig aktiv und im Code nie deaktiviert |
-| Auth / Secrets | Unauthentifiziertes öffentliches OGD — es werden keine API-Keys, Tokens oder Secrets gespeichert oder weitergereicht |
-| Input | Pydantic-v2-Validierung an allen Tool-Grenzen; Tool-Argumente filtern nur gecachte Zeilen, sie bauen nie eine URL |
-| Tools | Read-only by design (nur HTTP GET); keine dynamische oder Remote-Tool-Registrierung |
-| Fehler | Upstream-Fehler werden über `dump_status` offengelegt, nie stillschweigend verschluckt oder als leeres, vollständig aussehendes Resultat zurückgegeben |
-| Stdout | Reserviert für den JSON-RPC-Stream; der Server gibt kein Fremd-Logging auf stdout aus |
-| Binding | `stdio` als Default (keine Netzwerk-Angriffsfläche). SSE bindet an `HOST`, Default `127.0.0.1` (Loopback); `0.0.0.0` ist ein expliziter Opt-in für Container |
+| Auth / Secrets | Unauthentifiziertes öffentliches OGD — keine API-Keys, Tokens oder Secrets gespeichert oder weitergereicht |
+| Input | Pydantic-v2-Validierung an allen Tool-Grenzen mit expliziten Bounds (Jahr `1900–2100`, Hierarchie `level 1–8`, String `max_length`); Tool-Argumente filtern nur gecachte Zeilen, sie bauen nie eine URL (SEC-018) |
+| Tools | Read-only: jedes Tool ist mit `readOnlyHint: true`, `destructiveHint: false` annotiert; keine dynamische oder Remote-Tool-Registrierung (ARCH-009) |
+| Fehler | `mask_error_details=True` plus client-seitige Maskierung: Execution-Fehler erscheinen als `isError`-Tool-Result mit generischer Meldung; rohes Upstream-/Interndetail geht nur ins structlog-stderr-Log, nie ans Modell (OBS-002) |
+| Logging | Strukturierte JSON-Logs auf **stderr** via structlog; stdout bleibt dem JSON-RPC-Stream vorbehalten (OBS-003 / OBS-004) |
+| Binding | `stdio` als Default (keine Netzwerk-Angriffsfläche). SSE bindet an `HOST`, Default `127.0.0.1` (Loopback); `0.0.0.0` ist ein expliziter Opt-in für Container (SEC-016) |
+| CORS | SSE setzt Default-Deny-CORS — Browser-Origins müssen via `EFV_MCP_CORS_ORIGINS` explizit gelistet werden; nur `Mcp-Session-Id` wird exponiert (SDK-004) |
+| Container | Gehärtetes non-root [`Dockerfile`](Dockerfile) (uid 10001) mit `HEALTHCHECK` (SEC-007 / SCALE-004) |
+
+## Akzeptierte Risiken (ADRs)
+
+Zwei Kontrollen sind bewusst zurückgestellt und als Accepted-Risk-ADRs
+dokumentiert — geringes Risiko für einen Single-Instance-, No-Auth-,
+Read-only-Server mit zwei festen Hosts:
+
+- **DNS-Pinning** — [ADR 0001](docs/adr/0001-dns-pinning.md) (SEC-005): kein
+  nutzergesteuertes Ziel + die Egress-Allow-List neutralisieren die
+  DNS-Rebinding-Vorbedingung.
+- **Stateful Load Balancing** — [ADR 0002](docs/adr/0002-scaling-and-deployment.md)
+  (SCALE-002 / SCALE-003): als Single-Instance betrieben; Sticky-Sessions /
+  Shared-Session-Store mit expliziten Re-Evaluations-Triggern zurückgestellt.
 
 ## Akzeptierte Risiken (Kontrollen auf Portfolio-Ebene)
 

@@ -1,32 +1,69 @@
 """Entry point with dual transport.
 
-TRANSPORT env var selects the mode:
-  - "stdio" (default)          -> Claude Desktop
-  - "sse" / "streamable-http"  -> cloud (Railway, Render); binds HOST:PORT
+The ``TRANSPORT`` env var (or ``EFV_MCP_TRANSPORT``) selects the mode:
+  - "stdio" (default)                    -> Claude Desktop
+  - "sse" / "streamable-http" / "http"   -> cloud (Railway, Render); binds HOST:PORT
 
 HOST defaults to 127.0.0.1 (loopback); set HOST=0.0.0.0 only inside a container
-(the provided Dockerfile does). This keeps the SSE transport off the local
-network by default.
+(the provided Dockerfile does). This keeps the network transport off the local
+network by default (SEC-016).
 
-Note: mcp.settings.host / mcp.settings.port must be set *before* mcp.run(),
-not passed as kwargs. FastMCP SSE exposes /sse (not /mcp).
+For network transports the ASGI app is built via ``mcp.http_app(...)`` with
+default-deny CORS (browser origins must be listed explicitly via
+``EFV_MCP_CORS_ORIGINS``) and served with uvicorn (SDK-004).
 """
 
 from __future__ import annotations
 
-import os
-
+from .logging_config import configure_logging, get_logger
 from .server import mcp
+from .settings import get_settings
+
+_NETWORK = {"sse", "streamable-http", "http"}
 
 
 def main() -> None:
-    transport = os.environ.get("TRANSPORT", "stdio").lower()
+    settings = get_settings()
+    configure_logging(settings.log_level)
+    log = get_logger(__name__)
 
-    if transport in {"sse", "streamable-http"}:
-        mcp.settings.host = os.environ.get("HOST", "127.0.0.1")
-        mcp.settings.port = int(os.environ.get("PORT", "8000"))
-        mcp.run(transport="sse")
+    if settings.transport in _NETWORK:
+        import uvicorn
+        from starlette.middleware import Middleware
+        from starlette.middleware.cors import CORSMiddleware
+
+        transport = "sse" if settings.transport == "sse" else "http"
+        middleware = []
+        if settings.cors_origins:
+            middleware.append(
+                Middleware(
+                    CORSMiddleware,
+                    allow_origins=settings.cors_origins,
+                    allow_methods=["GET", "POST", "OPTIONS"],
+                    allow_headers=["*"],
+                    expose_headers=["Mcp-Session-Id"],
+                )
+            )
+        app = mcp.http_app(
+            transport=transport,
+            allowed_origins=settings.cors_origins or None,
+            middleware=middleware,
+        )
+        log.info(
+            "starting_network_transport",
+            transport=transport,
+            host=settings.host,
+            port=settings.port,
+            cors_origins=settings.cors_origins,
+        )
+        uvicorn.run(
+            app,
+            host=settings.host,
+            port=settings.port,
+            log_level=settings.log_level.lower(),
+        )
     else:
+        log.info("starting_stdio_transport")
         mcp.run(transport="stdio")
 
 

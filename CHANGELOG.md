@@ -7,7 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **SEC-021 — egress allow-list:** an immutable `ALLOWED_HOSTS` frozenset +
+  `assert_host_allowed()` (HTTPS-only, two fixed EFV hosts) is enforced before
+  every request in `client.py`; documented in `docs/network-egress.md`.
+- **OBS-002 — error-detail masking:** raw upstream/internal exception text is no
+  longer surfaced to the model; tool results carry a generic message and
+  `mask_error_details=True`, with full detail logged to stderr.
+- **SEC-018 — input bounds:** tool arguments carry explicit Pydantic constraints
+  (year `1900–2100`, `level 1–8`, string `max_length`).
+- **SDK-004 — default-deny CORS:** the SSE/HTTP transport sets explicit
+  `allowed_origins` (via `EFV_MCP_CORS_ORIGINS`) and exposes only `Mcp-Session-Id`.
+- **SEC-005 / SCALE-002 / SCALE-003 — accepted-risk ADRs:** DNS pinning
+  (`docs/adr/0001`) and stateful load balancing (`docs/adr/0002`) are deliberately
+  deferred with documented re-evaluation triggers.
+
 ### Added
+- **MCP best-practice audit** against the portfolio catalogue (68 checks, 44
+  applicable) under `audits/`: a baseline run and a post-remediation re-audit —
+  **production-ready** (0 blocking findings; 17 → 26 pass). Reproducible from the
+  stored `verification-results.json` / `summary.json`.
+- Tool annotations `readOnlyHint: true` / `destructiveHint: false` on all five
+  tools (ARCH-009).
+- Structured logging via `structlog` (JSON to stderr) in `logging_config.py`
+  (OBS-003 / OBS-004).
+- Typed configuration via `pydantic-settings` (`settings.py`); new env vars
+  `EFV_MCP_LOG_LEVEL`, `EFV_MCP_CORS_ORIGINS`, plus `EFV_MCP_`-prefixed aliases.
+- Shared, lifespan-managed httpx client (one connection pool reused across dumps,
+  closed on shutdown) (SDK-001).
+- Hardened `Dockerfile`: named runtime stage + `HEALTHCHECK` (SCALE-004).
+- Expanded test suite (`tests/test_hardening.py`): egress allow-list, error
+  masking, tool annotations, settings, shared-client reuse, and the
+  execution-error / protocol-error paths.
+
+### Changed
+- `__main__.py` rebuilt for FastMCP 3.x: network transports are served via
+  `mcp.http_app(...)` + uvicorn with CORS, fixing the former `mcp.settings` path.
 - Repository documentation and structure aligned with the Swiss Public Data MCP
   Portfolio convention.
 - `SECURITY.md` / `SECURITY.de.md`: security posture, accepted-risk decisions, and
