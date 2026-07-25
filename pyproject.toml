@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "swiss-efv-mcp"
 version = "0.1.0"
-description = "MCP server for Swiss federal finances (EFV) — budget, debt, forecasts and spending by task and institution"
+description = "MCP server for Swiss federal finances (EFV): budget, debt, forecasts and spending data"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
