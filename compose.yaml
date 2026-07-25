@@ -1,0 +1,31 @@
+# Hardened SSE deployment for swiss-efv-mcp (SCALE-006 / SEC-007).
+# The server holds only a small in-memory cache (~7 MB) and writes nothing to
+# disk, so it runs with a read-only root filesystem, dropped capabilities and
+# tight resource limits. Front it with a reverse proxy that terminates TLS.
+services:
+  swiss-efv-mcp:
+    build: .
+    image: swiss-efv-mcp
+    read_only: true                       # app writes nothing to disk
+    tmpfs:
+      - /tmp                              # scratch only
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+        reservations:
+          memory: 128M
+    environment:
+      TRANSPORT: sse
+      HOST: 0.0.0.0                        # container-scoped opt-in (see SECURITY.md)
+      PORT: "8000"
+      EFV_MCP_LOG_LEVEL: INFO
+      # EFV_MCP_CORS_ORIGINS: https://your-client.example   # default-deny; set explicitly
+    ports:
+      - "127.0.0.1:8000:8000"             # bind to loopback; expose via a reverse proxy
+    restart: unless-stopped

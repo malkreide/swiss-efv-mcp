@@ -100,6 +100,7 @@ Gebrauch sicher.
 | `PORT`      | `8000`      | Bind-Port (nur SSE)                                                         |
 | `EFV_MCP_LOG_LEVEL`    | `INFO` | structlog-Level (JSON auf stderr)                                 |
 | `EFV_MCP_CORS_ORIGINS` | `[]`   | Nur SSE: explizit erlaubte Browser-Origins (Default-Deny; kommasepariert oder JSON) |
+| `EFV_MCP_OTEL_ENABLED` | `false`| OpenTelemetry-Tracing aktivieren (benötigt das `otel`-Extra); Export via Standard-`OTEL_*`-Env-Vars |
 
 Cloud (Render / Railway):
 

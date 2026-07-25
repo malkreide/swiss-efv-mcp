@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **SDK-002:** tools now return typed Pydantic models, so FastMCP exposes an
+  output schema and structured content for every tool.
+- **SDK-003:** `Context` injection — tools emit debug logs and `fiscal_list_dimensions`
+  reports progress while loading the dumps.
+- **ARCH-002:** tool descriptions carry explicit use-case context.
+- **ARCH-003:** empty results return a guidance `note` (pointing at
+  `fiscal_list_dimensions` or a different level) instead of a silent empty.
+- **OBS-006:** optional OpenTelemetry tracing via the `otel` extra, gated by
+  `EFV_MCP_OTEL_ENABLED` (off by default; `src/swiss_efv_mcp/_otel.py`).
+- **SCALE-006 / SEC-007:** `compose.yaml` with CPU/memory limits, read-only root
+  filesystem, dropped capabilities and `no-new-privileges`.
+- **OPS-001:** per-tool live tests (`fiscal_by_institution`, `dump_status`) and a
+  scheduled/manual live-test workflow (`.github/workflows/live.yml`).
+- **OPS-003:** `docs/roadmap.md` documenting the phase architecture and the
+  audit backlog.
+
+### Security
+- **SEC-004:** the egress guard now rejects IP-literal hosts and re-asserts the
+  allow-list on the final URL after redirects.
+
 ## [0.2.0] - 2026-07-25
 
 First public release. Portfolio alignment plus the security/observability

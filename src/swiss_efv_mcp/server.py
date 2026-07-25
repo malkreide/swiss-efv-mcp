@@ -16,7 +16,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
@@ -97,8 +97,15 @@ async def headline_impl(
             )
         )
     points.sort(key=lambda p: p.year)
+    note = None
+    if not points:
+        note = (
+            f"No data matched variable={variable!r}, household={household!r}, "
+            f"model={model!r}. Call fiscal_list_dimensions to see the valid values."
+        )
     return HeadlineSeries(
-        provenance=prov, variable=variable, household=household, model=model, points=points
+        provenance=prov, variable=variable, household=household, model=model,
+        points=points, note=note,
     )
 
 
@@ -137,6 +144,11 @@ async def budget_impl(
     note = None
     if topic.endswith("ab 2023)") or topic.endswith("bis 2022)"):
         note = "Accounting-model break: 2023 uses a new model; series has a seam at 2022/2023."
+    elif not items:
+        note = (
+            f"No items at level={level} for topic={topic!r}, year={target_year}. "
+            f"Try a different level (1 = total) or fiscal_list_dimensions for valid topics."
+        )
     return BudgetBreakdown(
         provenance=prov, topic=topic, year=target_year, level=level, items=items, note=note
     )
@@ -174,11 +186,18 @@ async def institution_impl(
             )
         )
     points.sort(key=lambda p: (p.year, p.verwaltungseinheit or ""))
+    note = None
+    if not points:
+        note = (
+            f"No data matched variable={variable!r}, departement={departement!r}. "
+            f"Call fiscal_list_dimensions to see the valid departments and variables."
+        )
     return InstitutionSeries(
         provenance=prov,
         filter_departement=departement,
         filter_variable=variable,
         points=points,
+        note=note,
     )
 
 
@@ -223,14 +242,19 @@ async def fiscal_headline(
     model: Annotated[str, Field(max_length=20)] = "fs",
     year_from: Annotated[int | None, Field(ge=1900, le=2100)] = None,
     year_to: Annotated[int | None, Field(ge=1900, le=2100)] = None,
-) -> dict:
-    """Headline fiscal time series (revenue, expenditure, balance, debt ratios,
-    forecasts to 2029). variable e.g. 'saldo', 'einnahmen', 'ausgaben',
-    'bruttoschuldenquote'. household: bund|ktn|gdn|staat|sv. model: fs|gfs.
-    Use fiscal_list_dimensions to discover valid values."""
-    return (
-        await headline_impl(client, variable, household, model, year_from, year_to)
-    ).model_dump()
+    ctx: Context | None = None,
+) -> HeadlineSeries:
+    """Headline fiscal time series: revenue, expenditure, balance and debt ratios
+    over 1990–2029 (actuals plus budget/forecast years).
+
+    Use case: track how a federal aggregate evolved over time — e.g. "how did the
+    Bund balance develop since the 2022 rate turnaround?". variable e.g. 'saldo',
+    'einnahmen', 'ausgaben', 'bruttoschuldenquote'. household: bund|ktn|gdn|staat|sv.
+    model: fs|gfs. Every point flags `is_projection`. Call fiscal_list_dimensions
+    first to discover valid values; an empty result carries a `note` with guidance."""
+    if ctx is not None:
+        await ctx.debug(f"fiscal_headline variable={variable!r} household={household!r}")
+    return await headline_impl(client, variable, household, model, year_from, year_to)
 
 
 @mcp.tool(annotations=_READONLY)
@@ -239,12 +263,18 @@ async def fiscal_budget_breakdown(
     year: Annotated[int | None, Field(ge=1900, le=2100)] = None,
     level: Annotated[int, Field(ge=1, le=8)] = 2,
     contains: Annotated[str | None, Field(max_length=120)] = None,
-) -> dict:
-    """Hierarchical federal-budget breakdown for one topic and year. topic e.g.
-    'Ausgaben nach Aufgabengebiet', 'Ausgaben nach Art', 'Einnahmen'. level is
-    the hierarchy depth (1 = total, 2 = first breakdown ...). 'contains' filters
-    the path substring for drill-down."""
-    return (await budget_impl(client, topic, year, level, contains)).model_dump()
+    ctx: Context | None = None,
+) -> BudgetBreakdown:
+    """Hierarchical federal-budget breakdown for one topic and year.
+
+    Use case: see where the money goes — e.g. "which task areas absorbed the
+    spending growth?". topic e.g. 'Ausgaben nach Aufgabengebiet', 'Ausgaben nach
+    Art', 'Einnahmen'. level is the hierarchy depth (1 = total, 2 = first
+    breakdown …); 'contains' filters the path substring for drill-down. An empty
+    result carries a `note` suggesting a different level or topic."""
+    if ctx is not None:
+        await ctx.debug(f"fiscal_budget_breakdown topic={topic!r} level={level}")
+    return await budget_impl(client, topic, year, level, contains)
 
 
 @mcp.tool(annotations=_READONLY)
@@ -253,25 +283,44 @@ async def fiscal_by_institution(
     variable: Annotated[str, Field(max_length=80)] = "Personalausgaben",
     year_from: Annotated[int | None, Field(ge=1900, le=2100)] = None,
     year_to: Annotated[int | None, Field(ge=1900, le=2100)] = None,
-) -> dict:
-    """Federal spending by department / administrative unit since 2007. variable
-    one of: 'Personalausgaben', 'Informatik', 'Beratung und externe
-    Dienstleistungen', 'Anzahl Vollzeitstellen'."""
-    return (
-        await institution_impl(client, departement, variable, year_from, year_to)
-    ).model_dump()
+    ctx: Context | None = None,
+) -> InstitutionSeries:
+    """Federal spending by department / administrative unit since 2007.
+
+    Use case: compare personnel, IT or external-services spending across
+    departments — e.g. "IT spending of the Finanzdepartement since 2010?".
+    variable one of: 'Personalausgaben', 'Informatik', 'Beratung und externe
+    Dienstleistungen', 'Anzahl Vollzeitstellen'. An empty result carries a `note`
+    with guidance."""
+    if ctx is not None:
+        await ctx.debug(f"fiscal_by_institution departement={departement!r} variable={variable!r}")
+    return await institution_impl(client, departement, variable, year_from, year_to)
 
 
 @mcp.tool(annotations=_READONLY)
-async def fiscal_list_dimensions() -> dict:
+async def fiscal_list_dimensions(ctx: Context | None = None) -> Dimensions:
     """List the valid dimension values across all datasets (variables,
-    households, models, budget topics, departments). Call this first to build
-    correct parameters for the other tools."""
-    return (await dimensions_impl(client)).model_dump()
+    households, models, budget topics, departments).
+
+    Use case: call this first to build correct parameters for the other tools —
+    it turns free-text guesses into exact filter values. Loads all three dumps,
+    so it may take a moment on a cold cache."""
+    if ctx is not None:
+        await ctx.debug("fiscal_list_dimensions: loading all dumps")
+        await ctx.report_progress(0, 3)
+    result = await dimensions_impl(client)
+    if ctx is not None:
+        await ctx.report_progress(3, 3)
+    return result
 
 
 @mcp.tool(annotations=_READONLY)
-async def dump_status() -> dict:
-    """Report cache freshness and upstream health per dataset. Never returns
-    empty silently — used for graceful degradation."""
-    return status_impl(client).model_dump()
+async def dump_status(ctx: Context | None = None) -> StatusReport:
+    """Report cache freshness and upstream health per dataset.
+
+    Use case: check whether the data is fresh, cached or degraded before trusting
+    a figure — the health endpoint of this server. Never returns empty silently;
+    used for graceful degradation."""
+    if ctx is not None:
+        await ctx.debug("dump_status")
+    return status_impl(client)

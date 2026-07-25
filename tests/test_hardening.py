@@ -12,8 +12,9 @@ from fastmcp.exceptions import ToolError
 
 from swiss_efv_mcp.client import DATASETS, EFVClient, assert_host_allowed
 from swiss_efv_mcp.server import client as server_client
-from swiss_efv_mcp.server import mcp, status_impl
+from swiss_efv_mcp.server import headline_impl, mcp, status_impl
 from swiss_efv_mcp.settings import Settings
+from tests.conftest import FIXTURES
 
 # --- SEC-021 / SEC-004: egress allow-list -----------------------------------
 
@@ -31,6 +32,24 @@ def test_allowlist_rejects_off_host():
 def test_allowlist_rejects_non_https():
     with pytest.raises(ValueError):
         assert_host_allowed("http://www.efv.admin.ch/x")
+
+
+def test_allowlist_rejects_ip_literal():
+    # SEC-004: an IP literal is never on the hostname allow-list.
+    with pytest.raises(ValueError):
+        assert_host_allowed("https://169.254.169.254/latest/meta-data")
+
+
+@respx.mock
+async def test_redirect_off_host_is_rejected():
+    # SEC-004: a redirect to a disallowed host must be refused on the final URL.
+    respx.get(DATASETS["headline"].url).mock(
+        return_value=httpx.Response(302, headers={"Location": "https://evil.example/x"})
+    )
+    respx.get("https://evil.example/x").mock(return_value=httpx.Response(200, text="a,b\n1,2\n"))
+    c = EFVClient(backoff_base=0)
+    with pytest.raises(ValueError):
+        await c.load("headline")
 
 
 def test_dataset_urls_are_all_allowed():
@@ -137,3 +156,44 @@ async def test_protocol_error_on_unknown_tool():
     async with Client(mcp) as c:
         with pytest.raises(ToolError):
             await c.call_tool("does_not_exist", {})
+
+
+# --- SDK-002: typed output schema -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "fiscal_headline",
+        "fiscal_budget_breakdown",
+        "fiscal_by_institution",
+        "fiscal_list_dimensions",
+        "dump_status",
+    ],
+)
+async def test_tools_expose_output_schema(name):
+    tool = await mcp.get_tool(name)
+    assert tool.output_schema is not None  # typed Pydantic return -> outputSchema
+
+
+@respx.mock
+async def test_structured_content_carries_envelope():
+    for key, csv_text in FIXTURES.items():
+        respx.get(DATASETS[key].url).mock(return_value=httpx.Response(200, text=csv_text))
+    async with Client(mcp) as c:
+        res = await c.call_tool("fiscal_headline", {"variable": "saldo"})
+    sc = res.structured_content or {}
+    assert "provenance" in sc and "source" in sc and "points" in sc
+
+
+# --- ARCH-003: no silent empties --------------------------------------------
+
+
+@respx.mock
+async def test_empty_result_has_guidance_note():
+    for key, csv_text in FIXTURES.items():
+        respx.get(DATASETS[key].url).mock(return_value=httpx.Response(200, text=csv_text))
+    res = await headline_impl(EFVClient(), variable="does-not-exist")
+    assert res.points == []
+    assert res.note is not None
+    assert "fiscal_list_dimensions" in res.note

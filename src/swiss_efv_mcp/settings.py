@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     )
     cache_ttl: int = Field(default=86400, ge=0, description="Dump cache TTL in seconds")
     http_timeout: float = Field(default=60.0, gt=0, description="Per-request HTTP timeout (s)")
+    otel_enabled: bool = Field(
+        default=False,
+        description="Enable OpenTelemetry tracing (requires the 'otel' extra); OBS-006",
+    )
 
     @field_validator("cors_origins", mode="before")
     @classmethod

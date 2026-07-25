@@ -15,6 +15,7 @@ default-deny CORS (browser origins must be listed explicitly via
 
 from __future__ import annotations
 
+from ._otel import setup_otel
 from .logging_config import configure_logging, get_logger
 from .server import mcp
 from .settings import get_settings
@@ -25,6 +26,7 @@ _NETWORK = {"sse", "streamable-http", "http"}
 def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
+    setup_otel(settings.otel_enabled)  # OBS-006: no-op unless enabled + extra installed
     log = get_logger(__name__)
 
     if settings.transport in _NETWORK:

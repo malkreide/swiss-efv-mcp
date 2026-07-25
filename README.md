@@ -98,6 +98,7 @@ canonical names use the `EFV_MCP_` prefix. Defaults are safe for local use.
 | `PORT`      | `8000`      | Bind port (SSE only)                                                        |
 | `EFV_MCP_LOG_LEVEL`    | `INFO` | structlog level (JSON to stderr)                                  |
 | `EFV_MCP_CORS_ORIGINS` | `[]`   | SSE only: explicit allowed browser origins (default-deny; comma-separated or JSON) |
+| `EFV_MCP_OTEL_ENABLED` | `false`| Enable OpenTelemetry tracing (requires the `otel` extra); standard `OTEL_*` env vars configure export |
 
 Cloud (Render / Railway):
 
