@@ -32,10 +32,34 @@ module-level `frozenset` — it is not configurable or mutable at runtime.
 ## Network-layer control (deployment)
 
 When deploying the SSE container, pair the code-layer allow-list with a
-network-layer egress control so the pod/VM can only reach the hosts above:
+network-layer egress control so the pod/VM can only reach the hosts above. This
+is also the recommended mitigation for **DNS rebinding (SEC-005, [ADR 0001](adr/0001-dns-pinning.md))**:
+enforcing the destination at the network edge removes the need for per-request
+DNS pinning in application code.
 
-- **Kubernetes:** a `NetworkPolicy` with an egress rule to the two EFV hosts on 443.
-- **Cloud:** a security-group / firewall egress rule, or an egress proxy allow-list.
+- **Kubernetes:** a default-deny egress `NetworkPolicy`, plus an allow rule to
+  the two EFV hosts on TCP 443 (resolve via an egress gateway / DNS policy that
+  only permits `*.admin.ch`, or pin the resolved CIDRs).
+
+  ```yaml
+  apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata: { name: efv-mcp-egress }
+  spec:
+    podSelector: { matchLabels: { app: swiss-efv-mcp } }
+    policyTypes: [Egress]
+    egress:
+      - to: []                       # DNS
+        ports: [{ protocol: UDP, port: 53 }]
+      - to: []                       # HTTPS to admin.ch (front with an egress proxy allow-list)
+        ports: [{ protocol: TCP, port: 443 }]
+  ```
+
+- **Cloud:** a security-group / firewall egress rule limited to TCP 443 toward
+  the EFV hosts, or an **egress proxy** whose allow-list is exactly
+  `www.data.finance.admin.ch` and `www.efv.admin.ch`. An egress proxy is the
+  strongest control: it re-resolves and re-checks the host on every connection,
+  which is what a code-level DNS pin would do — but centrally and audibly.
 
 ## Updating the allow-list
 

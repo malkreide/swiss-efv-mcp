@@ -28,3 +28,24 @@ Before running **multiple SSE replicas** behind a load balancer, add one of:
 - a shared session store (e.g. Redis) with an explicit TTL,
 
 and add a failover test. Until then, run a single replica; scale vertically.
+
+### Sticky-session example (SCALE-003)
+
+When you do move to multiple replicas, pin each client to one instance on the
+`Mcp-Session-Id` header. Nginx:
+
+```nginx
+upstream efv_mcp {
+    hash $http_mcp_session_id consistent;   # sticky on Mcp-Session-Id
+    server efv-mcp-1:8000;
+    server efv-mcp-2:8000;
+}
+server {
+    location /sse { proxy_pass http://efv_mcp; proxy_set_header Host $host; }
+}
+```
+
+Kubernetes Ingress (nginx): `nginx.ingress.kubernetes.io/upstream-hash-by:
+"$http_mcp_session_id"`. Traefik: a sticky-session service keyed on the same
+header. This is a deployment-layer control; the server code stays stateless
+per request.

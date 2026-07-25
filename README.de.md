@@ -3,7 +3,7 @@
 
 # 🏛️ swiss-efv-mcp
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](CHANGELOG.md)
 [![CI](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
@@ -116,7 +116,8 @@ TRANSPORT=sse PORT=8000 swiss-efv-mcp   # exponiert /sse
 | `fiscal_budget_breakdown` | Hierarchischer Bundeshaushalt nach Thema (Ausgaben nach Art / nach Aufgabengebiet, Einnahmen, Bilanz, …) |
 | `fiscal_by_institution` | Ausgaben nach Departement / Verwaltungseinheit seit 2007 (Personalausgaben, Informatik, externe Dienstleistungen, Vollzeitstellen) |
 | `fiscal_list_dimensions` | Gültige Parameterwerte entdecken — zuerst aufrufen, um korrekte Argumente zu bilden |
-| `dump_status` | Cache-Aktualität und Upstream-Zustand pro Datensatz; liefert nie stillschweigend leer |
+| `fiscal_status` | Cache-Aktualität und Upstream-Zustand pro Datensatz; liefert nie stillschweigend leer |
+| `dump_status` | **Veralteter** Alias von `fiscal_status` (aus Kompatibilitätsgründen erhalten; wird in einem künftigen Minor entfernt) |
 
 Alle Tools sind **read-only**: jedes ist mit `readOnlyHint: true`,
 `destructiveHint: false` annotiert, stellt nur HTTP-GETs an die EFV-Dump-Files
@@ -248,8 +249,12 @@ schreibfähigen Tools ein Re-Audit erfordern.
 
 Die Protokoll-Version wird beim `initialize`-Handshake von
 [FastMCP](https://pypi.org/project/fastmcp/) ausgehandelt (fixiert `fastmcp>=3.4`
-in `pyproject.toml`), das auf dem `mcp`-Python-SDK aufbaut. Abhängigkeiten werden
-über monatliche Dependabot-PRs aktuell gehalten (`.github/dependabot.yml`);
+in `pyproject.toml`), das auf dem `mcp`-Python-SDK aufbaut. Die Baseline, gegen
+die dieser Server gebaut und auditiert ist, ist **`2025-11-25`**, in `server.py`
+als `MCP_PROTOCOL_VERSION` fixiert; ein Regressionstest prüft, dass die
+ausgehandelte Version weiterhin damit übereinstimmt — ein protokoll-ändernder
+SDK-Bump bricht so die CI **laut** (ARCH-012). Abhängigkeiten werden über
+monatliche Dependabot-PRs aktuell gehalten (`.github/dependabot.yml`);
 protokoll-relevante Bumps werden in [`CHANGELOG.md`](CHANGELOG.md) vermerkt.
 
 ## Testing

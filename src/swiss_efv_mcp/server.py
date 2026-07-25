@@ -44,6 +44,14 @@ async def _lifespan(_server: FastMCP):
         await client.aclose()
 
 
+# MCP protocol baseline this server is built and audited against (ARCH-012).
+# FastMCP negotiates the concrete version at the `initialize` handshake; a
+# regression test asserts the negotiated version still equals this constant, so a
+# protocol-changing SDK bump fails CI loudly instead of drifting silently. The
+# `mcp` SDK floor in pyproject.toml (via fastmcp) is what supplies this version;
+# Dependabot keeps it current.
+MCP_PROTOCOL_VERSION = "2025-11-25"
+
 # `mask_error_details=True` keeps upstream/internal error text out of tool
 # results (OBS-002); execution errors surface as `isError` tool-results while
 # protocol errors stay JSON-RPC errors (OBS-001).
@@ -315,12 +323,24 @@ async def fiscal_list_dimensions(ctx: Context | None = None) -> Dimensions:
 
 
 @mcp.tool(annotations=_READONLY)
-async def dump_status(ctx: Context | None = None) -> StatusReport:
+async def fiscal_status(ctx: Context | None = None) -> StatusReport:
     """Report cache freshness and upstream health per dataset.
 
     Use case: check whether the data is fresh, cached or degraded before trusting
     a figure — the health endpoint of this server. Never returns empty silently;
     used for graceful degradation."""
     if ctx is not None:
-        await ctx.debug("dump_status")
+        await ctx.debug("fiscal_status")
+    return status_impl(client)
+
+
+@mcp.tool(annotations=_READONLY)
+async def dump_status(ctx: Context | None = None) -> StatusReport:
+    """DEPRECATED — use `fiscal_status`. Kept as an alias for backward
+    compatibility; will be removed in a future minor release.
+
+    Reports cache freshness and upstream health per dataset (SEC-022: every tool
+    now shares the `fiscal_` server-identity namespace)."""
+    if ctx is not None:
+        await ctx.debug("dump_status (deprecated alias of fiscal_status)")
     return status_impl(client)

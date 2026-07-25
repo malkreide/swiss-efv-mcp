@@ -11,8 +11,8 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
 from swiss_efv_mcp.client import DATASETS, EFVClient, assert_host_allowed
+from swiss_efv_mcp.server import MCP_PROTOCOL_VERSION, headline_impl, mcp, status_impl
 from swiss_efv_mcp.server import client as server_client
-from swiss_efv_mcp.server import headline_impl, mcp, status_impl
 from swiss_efv_mcp.settings import Settings
 from tests.conftest import FIXTURES
 
@@ -88,6 +88,7 @@ async def test_error_message_is_masked():
         "fiscal_budget_breakdown",
         "fiscal_by_institution",
         "fiscal_list_dimensions",
+        "fiscal_status",
         "dump_status",
     ],
 )
@@ -158,6 +159,26 @@ async def test_protocol_error_on_unknown_tool():
             await c.call_tool("does_not_exist", {})
 
 
+# --- ARCH-012: protocol version is pinned -----------------------------------
+
+
+async def test_negotiated_protocol_version_matches_pin():
+    # A protocol-changing SDK bump must fail CI loudly, not drift silently.
+    async with Client(mcp) as c:
+        assert c.initialize_result.protocolVersion == MCP_PROTOCOL_VERSION
+
+
+# --- SEC-022: fiscal_ namespace + deprecated alias --------------------------
+
+
+async def test_dump_status_is_deprecated_alias_of_fiscal_status():
+    canonical = await mcp.get_tool("fiscal_status")
+    alias = await mcp.get_tool("dump_status")
+    assert canonical.annotations.readOnlyHint is True
+    assert "DEPRECATED" in (alias.description or "")
+    assert "fiscal_status" in (alias.description or "")
+
+
 # --- SDK-002: typed output schema -------------------------------------------
 
 
@@ -168,6 +189,7 @@ async def test_protocol_error_on_unknown_tool():
         "fiscal_budget_breakdown",
         "fiscal_by_institution",
         "fiscal_list_dimensions",
+        "fiscal_status",
         "dump_status",
     ],
 )

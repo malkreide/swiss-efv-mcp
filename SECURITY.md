@@ -57,6 +57,12 @@ unauthenticated, and reaches only two trusted public-data hosts.
 - **Cross-server tool-poisoning detection** — a gateway/host responsibility. This
   server's tool definitions are version-controlled, authored in-repo, and
   reviewed via PR; there is no dynamic or remote tool registration.
+- **Tool namespace & hash pinning (SEC-022)** — every tool shares the `fiscal_`
+  server-identity prefix, and the server is published under the MCP Registry name
+  `io.github.malkreide/swiss-efv-mcp`. Detecting a *tool-definition change across
+  sessions* ("rug pull") is a gateway/host responsibility — a single server
+  cannot attest its own immutability — so tool-hash pinning is enforced at that
+  layer, not here.
 - **Network binding for hosted deployments** — the SSE transport defaults to
   `127.0.0.1` (loopback). Binding to `0.0.0.0` is an explicit opt-in for
   container deployments; front it with a reverse proxy / gateway that enforces
