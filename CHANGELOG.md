@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Repository documentation and structure aligned with the Swiss Public Data MCP
+  Portfolio convention.
+- `SECURITY.md` / `SECURITY.de.md`: security posture, accepted-risk decisions, and
+  the vulnerability-reporting process; linked from both READMEs.
+- `CONTRIBUTING.md` / `CONTRIBUTING.de.md` and `PUBLISHING.md` (step-by-step PyPI
+  release via Trusted Publishing).
+- GitHub Actions CI workflow (`.github/workflows/ci.yml`): ruff + offline pytest
+  on Python 3.11–3.13, with a CI status badge in both READMEs.
+- `Publish to PyPI` workflow (`.github/workflows/publish.yml`) using PyPI Trusted
+  Publishing (OIDC) on GitHub Release, plus MCP Registry publishing; `server.json`
+  registry manifest.
+- Dependabot config (`.github/dependabot.yml`): monthly `pip` and
+  `github-actions` updates.
+- Hardened non-root `Dockerfile` (SSE) and `.dockerignore`; `.gitignore`.
+- README sections aligned with the portfolio: portfolio banner, linked badges,
+  `Available Tools`, `Safety & Limits`, `Project Phase`, `MCP Protocol Version`,
+  `Security` and `Contributing`, plus the `mcp-name` registry footer.
+
+### Changed
+- Distribution metadata in `pyproject.toml`: `LICENSE`-referenced license,
+  per-version Python classifiers (3.11–3.13), author `Hayal Oezkan`, and
+  `Repository` / `Issues` / `Changelog` / `Portfolio` project URLs.
+
+### Security
+- SSE transport now binds to `127.0.0.1` (loopback) by default instead of
+  `0.0.0.0`. Binding to `0.0.0.0` is an explicit opt-in for containers (the
+  provided `Dockerfile` sets it). README / SECURITY updated.
+
 ## [0.1.0] - 2026-07-24
 
 ### Added

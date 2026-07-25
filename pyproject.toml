@@ -8,13 +8,20 @@ version = "0.1.0"
 description = "MCP server for Swiss federal finances (EFV) — budget, debt, forecasts and spending by task and institution"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "malkreide" }]
+license = { file = "LICENSE" }
+authors = [{ name = "Hayal Oezkan" }]
 keywords = ["mcp", "model-context-protocol", "llm", "swiss-open-data", "public-finance", "efv"]
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Natural Language :: German",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
     "fastmcp>=1.26.0",
@@ -35,7 +42,10 @@ swiss-efv-mcp = "swiss_efv_mcp.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/malkreide/swiss-efv-mcp"
-Source = "https://github.com/malkreide/swiss-efv-mcp"
+Repository = "https://github.com/malkreide/swiss-efv-mcp"
+Issues = "https://github.com/malkreide/swiss-efv-mcp/issues"
+Changelog = "https://github.com/malkreide/swiss-efv-mcp/blob/main/CHANGELOG.md"
+Portfolio = "https://github.com/malkreide/swiss-public-data-mcp"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/swiss_efv_mcp"]
