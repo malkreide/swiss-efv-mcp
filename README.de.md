@@ -49,6 +49,10 @@ fiscal_budget_breakdown(topic="Ausgaben nach Aufgabengebiet", level=2)
 Quergelesen mit `swiss-snb-mcp` verbindet das den Zinszyklus mit dem
 Bunddefizit — etwas, das keiner der beiden Server allein beantworten kann.
 
+### Demo
+
+![Demo: Claude nutzt fiscal_headline und fiscal_budget_breakdown](docs/assets/demo.svg)
+
 ## Voraussetzungen
 
 - Python 3.11+
@@ -269,11 +273,6 @@ PYTHONPATH=src ruff check src tests
 
 Siehe [CHANGELOG.md](CHANGELOG.md).
 
-## Sicherheit
-
-Siehe [SECURITY.md](SECURITY.md) für Sicherheits-Posture, Härtungskontrollen und
-wie Schwachstellen gemeldet werden.
-
 ## Mitwirken
 
 Issues und Pull Requests sind willkommen. Bitte Tools read-only halten, vor dem
@@ -283,6 +282,11 @@ nutzersichtbare Änderungen einen Eintrag unter `[Unreleased]` in der
 
 Maintainer: siehe [PUBLISHING.md](PUBLISHING.md) für den
 Schritt-für-Schritt-PyPI-Release-Prozess (Trusted Publishing via GitHub Release).
+
+## Sicherheit
+
+Siehe [SECURITY.md](SECURITY.md) für Sicherheits-Posture, Härtungskontrollen und
+wie Schwachstellen gemeldet werden.
 
 ## Lizenz
 

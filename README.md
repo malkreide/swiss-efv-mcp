@@ -48,6 +48,10 @@ fiscal_budget_breakdown(topic="Ausgaben nach Aufgabengebiet", level=2)
 Cross-read with `swiss-snb-mcp`, this connects the interest-rate cycle to the
 federal deficit — something neither server can answer alone.
 
+### Demo
+
+![Demo: Claude using fiscal_headline and fiscal_budget_breakdown](docs/assets/demo.svg)
+
 ## Prerequisites
 
 - Python 3.11+
@@ -260,11 +264,6 @@ PYTHONPATH=src ruff check src tests
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-## Security
-
-See [SECURITY.md](SECURITY.md) for the security posture, hardening controls, and
-how to report a vulnerability.
-
 ## Contributing
 
 Issues and pull requests are welcome. Please keep tools read-only, run
@@ -274,6 +273,11 @@ Issues and pull requests are welcome. Please keep tools read-only, run
 
 Maintainers: see [PUBLISHING.md](PUBLISHING.md) for the step-by-step PyPI release
 process (Trusted Publishing via GitHub Release).
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for the security posture, hardening controls, and
+how to report a vulnerability.
 
 ## License
 
