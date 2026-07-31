@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-31
+
+### Geaendert
+
+- **Der Server gibt sich nicht mehr als Chrome aus.** Bis 0.3.0 sendete er
+  `Mozilla/5.0 (X11; Linux x86_64) ... Chrome/124.0 Safari/537.36`, mit dem
+  Vermerk, die Endpunkte wiesen alles andere mit 403 ab (gemessen 2026-07-24).
+
+  Am 2026-07-31 nachgemessen: alle drei Datensatz-URLs auf beiden Hosts, je
+  vier User-Agents — Chrome, die ehrliche Kennung, `curl/8.5.0` und ganz ohne
+  UA-Header. Jede Anfrage antwortete 200/206; die ehrliche Kennung anschliessend
+  dreimal ueber alle drei Datensaetze wiederholt, neun von neun erfolgreich.
+  Die Einschraenkung besteht nicht mehr.
+
+  Neu sendet der Server `swiss-efv-mcp/<version> (+github.com/...)` aus den
+  Paket-Metadaten. Eine gefaelschte Kennung kostet den Betreiber die
+  Moeglichkeit, uns in seinen Logs zu erkennen und uns bei Fehlverhalten zu
+  erreichen — das ist nur fuer eine Sperre zu zahlen, die es tatsaechlich gibt.
+  Sollte die EFV wieder filtern, gehoert zum Zurueckdrehen die Aktualisierung
+  des Vermerks: eine veraltete Begruendung ist der Grund, warum diese hier so
+  lange unhinterfragt blieb.
+
 ## [0.3.0] - 2026-07-25
 
 Medium-findings audit backlog worked through — 0 failing checks; the three
