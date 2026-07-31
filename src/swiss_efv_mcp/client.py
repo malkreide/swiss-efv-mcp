@@ -6,7 +6,10 @@ files, cleans them, caches them in memory with a TTL, and lets the tool layer
 slice them.
 
 Live-probe findings baked in here (verified 2026-07-24):
-- opendata.swiss and efv.admin.ch return HTTP 403 without a browser User-Agent.
+- opendata.swiss and efv.admin.ch returned HTTP 403 without a browser
+  User-Agent. **No longer true** — re-measured 2026-07-31, both hosts answer an
+  honest User-Agent, curl, and a request with no UA header at all. See the note
+  at ``_UA``.
 - The opendata.swiss "CSV" URLs for two datasets point to an HTML landing page;
   the real files live on a DAM path (``/dam/de/sd-web/{id}/{name}_de.csv``) whose
   opaque id may rotate when EFV re-uploads. Kept here explicitly.
@@ -26,6 +29,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from . import __version__
 from .logging_config import get_logger
 
 _log = get_logger(__name__)
@@ -76,11 +80,21 @@ ATTRIBUTION = (
     "Kein Anspruch auf Vollstaendigkeit."
 )
 
-# Browser UA is mandatory — the endpoints 403 the default httpx/curl UA.
-_UA = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-)
+# Up to 0.3.0 this sent a spoofed Chrome User-Agent, on the note that the
+# endpoints 403 anything else (measured 2026-07-24).
+#
+# Re-measured 2026-07-31 against all three dataset URLs on both hosts, with
+# four User-Agents each — Chrome, this honest one, `curl/8.5.0`, and no UA
+# header at all. Every request answered 200/206; the honest UA was then
+# repeated three times across all three datasets, nine of nine successful.
+# Whatever was rejecting non-browser clients is no longer doing so.
+#
+# So the server says who it is. A spoofed UA costs the operator the ability to
+# recognise us in their logs and to reach us if we misbehave — a price worth
+# paying only for a restriction that actually exists. Should EFV start
+# filtering again, restore a browser UA *and update this note*; a stale
+# justification is how this one survived unexamined.
+_UA = f"swiss-efv-mcp/{__version__} (+https://github.com/malkreide/swiss-efv-mcp)"
 
 _DATA_FINANCE = "https://www.data.finance.admin.ch/static/assets/datasets"
 _DAM = "https://www.efv.admin.ch/dam/de/sd-web"
