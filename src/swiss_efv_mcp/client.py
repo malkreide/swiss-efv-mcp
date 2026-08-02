@@ -141,10 +141,29 @@ _CACHE_TTL_SECONDS = 24 * 3600
 
 # --- Retry policy (ARCH-014) ------------------------------------------------
 # Three questions the retry has to answer: *what* is retried, *how fast*, and
-# *how long*. The first was already settled below (4xx except 429 fails fast);
-# these constants settle the second.
+# *how long*. The first is settled below (4xx except 429 fails fast); these
+# constants settle the other two.
 
 _ATTEMPTS = 4
+
+# Ceiling on the *whole* call — every attempt, every wait, together.
+#
+# An attempt count is not a bound: four attempts at a 60s per-request timeout
+# plus backoff are over four minutes, and the number never says so. Worse, the
+# relevant limit is not ours. The caller has its own timeout, and past it
+# nobody is listening any more — the work continues, the load lands on the
+# source, and the result goes nowhere.
+#
+# The anchor is measured, not guessed: the Python MCP SDK ships
+# ``MCP_DEFAULT_TIMEOUT = 30.0`` for general operations
+# (``mcp/shared/_httpx_utils.py``). 25s leaves headroom for MCP framing, CSV
+# parsing and the tool layer on top of the fetch.
+#
+# The trade-off is real and deliberate: a slow first attempt can now consume
+# the budget and leave no room for a retry. That is the intended answer — a
+# retry that finishes after the caller gave up buys nothing and costs the
+# source a request.
+_TOTAL_BUDGET_SECONDS = 25.0
 
 # Ceiling for a single wait. Guards two things at once: an exponential ladder
 # that would otherwise grow without bound, and a `Retry-After` value the source
@@ -206,7 +225,11 @@ class _CacheEntry:
 class EFVClient:
     """Thin async client with retry, UA injection and TTL cache."""
 
-    timeout: float = 60.0
+    # Per-operation ceiling (connect, read, write, pool) — httpx applies it to
+    # each, not to the call as a whole. `total_budget` is what bounds the whole
+    # call; the effective per-attempt timeout is the smaller of the two.
+    timeout: float = 25.0
+    total_budget: float = _TOTAL_BUDGET_SECONDS
     backoff_base: float = 2.0  # tests set 0 for instant retries
     _cache: dict[str, _CacheEntry] = field(default_factory=dict)
     _last_error: dict[str, str] = field(default_factory=dict)
@@ -246,12 +269,26 @@ class EFVClient:
 
     async def _fetch_with_retry(self, http: httpx.AsyncClient, url: str) -> httpx.Response:
         assert_host_allowed(url)  # SEC-021: enforce egress allow-list before any request
+        deadline = time.monotonic() + self.total_budget
         last_error: Exception | None = None
+        attempts = 0
         for attempt in range(_ATTEMPTS):
             if attempt > 0:
-                await asyncio.sleep(self._delay(attempt, last_error))
+                delay = self._delay(attempt, last_error)
+                # A wait that outlasts the budget is a wait for nobody: the
+                # caller has given up by the time it ends. Stop instead.
+                if delay >= deadline - time.monotonic():
+                    break
+                await asyncio.sleep(delay)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            attempts += 1
             try:
-                resp = await http.get(url)
+                # The budget wins over the per-operation ceiling once it is the
+                # tighter of the two — otherwise a single slow attempt could
+                # outlast the whole allowance.
+                resp = await http.get(url, timeout=min(self.timeout, remaining))
                 # SEC-004: a redirect must not smuggle egress off the allow-list.
                 assert_host_allowed(str(resp.url))
                 resp.raise_for_status()
@@ -261,16 +298,29 @@ class EFVClient:
                 status = getattr(getattr(exc, "response", None), "status_code", None)
                 if status is not None and 400 <= status < 500 and status != 429:
                     raise
-        assert last_error is not None
+        if last_error is None:  # budget gone before a single request went out
+            raise RuntimeError(
+                f"Upstream not attempted: {self.total_budget:g}s budget already spent "
+                f"(host={urlsplit(url).hostname})"
+            )
         # httpx timeout/connect errors carry an *empty* ``str()`` — interpolating
         # only the message produced a bare "Upstream unreachable after retries:"
         # that named neither the failure mode nor the host. Always report the
         # exception type and the host so a transient outage is distinguishable
         # from a broken URL at a glance.
+        #
+        # Which limit ran out is part of that: "all 4 attempts used" and "the
+        # budget ran out after 2" call for different fixes — more patience in
+        # the first case, a faster source or a wider budget in the second.
+        why = (
+            f"all {_ATTEMPTS} attempts used"
+            if attempts >= _ATTEMPTS
+            else f"{self.total_budget:g}s budget spent"
+        )
         detail = str(last_error) or "no further detail"
         raise RuntimeError(
-            f"Upstream unreachable after {_ATTEMPTS} attempts: {type(last_error).__name__}: "
-            f"{detail} (host={urlsplit(url).hostname})"
+            f"Upstream unreachable after {attempts} attempt(s), {why}: "
+            f"{type(last_error).__name__}: {detail} (host={urlsplit(url).hostname})"
         ) from last_error
 
     async def load(self, key: str) -> tuple[list[dict[str, str]], str]:

@@ -29,16 +29,18 @@ from swiss_efv_mcp.server import (
 
 pytestmark = [pytest.mark.live, pytest.mark.asyncio(loop_scope="session")]
 
-# Tighter than the production defaults (60s / 2.0). The live suite is a
-# monitor: when upstream is down it should say so in about a minute, not sit
-# through a 60s-timeout ladder. The dumps are 0.5-5 MB and answer in seconds.
-_LIVE_TIMEOUT = 30.0
+# The production defaults now carry the tight bound themselves — a 25s total
+# budget over the whole call (ARCH-014), so the suite no longer needs to
+# undercut the per-request timeout. Only the backoff is still shortened: the
+# suite is a monitor, and a dead source should show up in seconds rather than
+# in the production ladder's 2/4/8. The dumps are 0.5-5 MB and answer in
+# seconds when the source is alive.
 _LIVE_BACKOFF = 1.0  # 1s, 2s, 4s between the four attempts
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def client():
-    c = EFVClient(timeout=_LIVE_TIMEOUT, backoff_base=_LIVE_BACKOFF)
+    c = EFVClient(backoff_base=_LIVE_BACKOFF)
     try:
         yield c
     finally:

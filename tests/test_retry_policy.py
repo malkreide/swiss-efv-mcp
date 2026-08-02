@@ -21,9 +21,11 @@ import pytest
 import respx
 
 from swiss_efv_mcp.client import (
+    _ATTEMPTS,
     _JITTER_SPREAD,
     _MAX_DELAY_SECONDS,
     _RETRY_AFTER_JITTER,
+    _TOTAL_BUDGET_SECONDS,
     DATASETS,
     EFVClient,
     parse_retry_after,
@@ -191,3 +193,82 @@ def test_http_client_does_not_retry_on_its_own_level():
     transport = c._client()._transport
     assert getattr(transport, "_pool", None) is not None
     assert transport._pool._retries == 0
+
+
+# --- total budget (ARCH-014) ------------------------------------------------
+
+
+@pytest.fixture
+def fake_clock(monkeypatch):
+    """A clock that only advances when the client sleeps.
+
+    Without it the budget can never run out in a test: patched-out sleeps take
+    no wall-clock time, so ``time.monotonic()`` never moves and every deadline
+    holds forever. The test would then pass whatever the budget logic did.
+    """
+    now = {"t": 1000.0}
+    slept: list[float] = []
+
+    async def _sleep(seconds):
+        slept.append(seconds)
+        now["t"] += seconds
+
+    monkeypatch.setattr("swiss_efv_mcp.client.time.monotonic", lambda: now["t"])
+    monkeypatch.setattr("swiss_efv_mcp.client.asyncio.sleep", _sleep)
+    return {"advance": lambda s: now.update(t=now["t"] + s), "slept": slept}
+
+
+@respx.mock
+async def test_budget_cuts_the_ladder_short(fake_clock):
+    """Fewer than _ATTEMPTS requests go out once the waits would outlast the budget."""
+    route = respx.get(URL).mock(side_effect=httpx.ConnectTimeout(""))
+    c = EFVClient(backoff_base=10.0, total_budget=12.0)  # waits 5-15s, 50-150s, ...
+    with pytest.raises(RuntimeError) as exc_info:
+        await c.load("headline")
+    assert route.call_count < _ATTEMPTS, "budget did not bound the ladder"
+    assert route.call_count >= 1, "the first attempt must always go out"
+    assert "budget spent" in str(exc_info.value)
+    assert "12s" in str(exc_info.value)
+
+
+@respx.mock
+async def test_full_ladder_runs_when_the_budget_allows(fake_clock):
+    """Counter-direction: a wide budget must not cut anything short."""
+    route = respx.get(URL).mock(side_effect=httpx.ConnectTimeout(""))
+    c = EFVClient(backoff_base=2.0, total_budget=600.0)
+    with pytest.raises(RuntimeError) as exc_info:
+        await c.load("headline")
+    assert route.call_count == _ATTEMPTS
+    assert "all 4 attempts used" in str(exc_info.value)
+
+
+@respx.mock
+async def test_per_attempt_timeout_is_clamped_to_the_remaining_budget(fake_clock):
+    """A single attempt may not be granted more time than the budget has left."""
+    route = respx.get(URL).mock(return_value=httpx.Response(200, text=FIXTURES["headline"]))
+    c = EFVClient(timeout=25.0, total_budget=4.0)
+    await c.load("headline")
+    sent = route.calls.last.request.extensions["timeout"]
+    assert sent["read"] == pytest.approx(4.0), sent
+
+
+@respx.mock
+async def test_budget_does_not_touch_the_happy_path(fake_clock):
+    route = respx.get(URL).mock(return_value=httpx.Response(200, text=FIXTURES["headline"]))
+    rows, prov = await EFVClient().load("headline")
+    assert rows and prov == "dump"
+    assert route.call_count == 1
+    assert fake_clock["slept"] == []
+
+
+def test_default_budget_stays_under_the_mcp_client_default():
+    """The budget is only meaningful relative to the caller's own timeout.
+
+    ``MCP_DEFAULT_TIMEOUT`` is what the Python MCP SDK grants a general
+    operation. A budget at or above it would let the server work past the point
+    where its answer can still be delivered.
+    """
+    from mcp.shared._httpx_utils import MCP_DEFAULT_TIMEOUT
+
+    assert _TOTAL_BUDGET_SECONDS < MCP_DEFAULT_TIMEOUT
+    assert EFVClient().timeout <= _TOTAL_BUDGET_SECONDS
