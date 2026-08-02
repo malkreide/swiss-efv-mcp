@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Behoben
+
+- **Fehlermeldung bei unerreichbarem Upstream nannte den Fehler nicht.**
+  `RuntimeError: Upstream unreachable after retries: ` endete im Nichts, weil
+  `httpx.ConnectTimeout` / `ReadTimeout` / `ConnectError` ein leeres `str()`
+  tragen. Die Meldung nennt jetzt immer den Exception-Typ und den Host, also
+  z. B. `Upstream unreachable after 4 attempts: ConnectTimeout: no further
+  detail (host=www.data.finance.admin.ch)`, und verkettet die Ursache via
+  `raise ... from`. Damit ist eine voruebergehende Netzstoerung auf einen Blick
+  von einer kaputten URL zu unterscheiden. Der Wortlaut bleibt intern — nach
+  aussen maskiert `mask_error_details` weiterhin auf den Typnamen (OBS-002).
+
+### Geaendert
+
+- **Die Live-Suite teilt sich einen `EFVClient`.** Bisher legte jeder Test eine
+  eigene Instanz an, womit der Cache nutzlos war und derselbe Dump mehrfach
+  geladen wurde. Beim Ausfall am 2026-08-01 lief deshalb viermal dieselbe
+  aussichtslose Retry-Leiter: vier Tests, 17 Minuten. Jetzt wird jeder Datensatz
+  einmal pro Lauf geholt (Suite-Laufzeit ~10 s), der geteilte Connection-Pool
+  wird beim Teardown geschlossen statt pro Test zu lecken, und die Suite nutzt
+  engere Timeouts (30 s statt 60 s, Backoff 1.0 statt 2.0): ein toter Upstream
+  meldet sich in etwa einer Minute. Der `live`-Workflow bekommt zusaetzlich
+  `timeout-minutes: 10` als Backstop.
+
 ## [0.3.1] - 2026-07-31
 
 ### Geaendert

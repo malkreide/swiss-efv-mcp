@@ -189,7 +189,16 @@ class EFVClient:
                 if status is not None and 400 <= status < 500 and status != 429:
                     raise
         assert last_error is not None
-        raise RuntimeError(f"Upstream unreachable after retries: {last_error}")
+        # httpx timeout/connect errors carry an *empty* ``str()`` — interpolating
+        # only the message produced a bare "Upstream unreachable after retries:"
+        # that named neither the failure mode nor the host. Always report the
+        # exception type and the host so a transient outage is distinguishable
+        # from a broken URL at a glance.
+        detail = str(last_error) or "no further detail"
+        raise RuntimeError(
+            f"Upstream unreachable after 4 attempts: {type(last_error).__name__}: "
+            f"{detail} (host={urlsplit(url).hostname})"
+        ) from last_error
 
     async def load(self, key: str) -> tuple[list[dict[str, str]], str]:
         """Return (rows, provenance). provenance is 'cached' or 'dump'."""

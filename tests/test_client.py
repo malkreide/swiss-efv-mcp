@@ -65,6 +65,22 @@ async def test_timeout_raises_without_cache():
 
 
 @respx.mock
+async def test_retry_exhaustion_message_names_type_and_host():
+    # httpx timeout/connect errors carry an empty str(); interpolating only the
+    # message used to yield a bare "Upstream unreachable after retries:" that
+    # said nothing. The type and host must survive an empty message.
+    respx.get(DATASETS["headline"].url).mock(side_effect=httpx.ConnectTimeout(""))
+    c = EFVClient(backoff_base=0)
+    with pytest.raises(RuntimeError) as exc_info:
+        await c.load("headline")
+    msg = str(exc_info.value)
+    assert "ConnectTimeout" in msg
+    assert "www.data.finance.admin.ch" in msg
+    assert not msg.rstrip().endswith(":")
+    assert isinstance(exc_info.value.__cause__, httpx.ConnectTimeout)
+
+
+@respx.mock
 async def test_status_reports_degraded_after_error():
     respx.get(DATASETS["headline"].url).mock(side_effect=httpx.ConnectError("boom"))
     c = EFVClient(backoff_base=0)
