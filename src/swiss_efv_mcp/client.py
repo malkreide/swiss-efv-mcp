@@ -23,8 +23,11 @@ import asyncio
 import csv
 import io
 import ipaddress
+import random
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit
 
 import httpx
@@ -136,6 +139,62 @@ _NULLISH = {"", "NA", "N/A", "null", "None"}
 
 _CACHE_TTL_SECONDS = 24 * 3600
 
+# --- Retry policy (ARCH-014) ------------------------------------------------
+# Three questions the retry has to answer: *what* is retried, *how fast*, and
+# *how long*. The first was already settled below (4xx except 429 fails fast);
+# these constants settle the second.
+
+_ATTEMPTS = 4
+
+# Ceiling for a single wait. Guards two things at once: an exponential ladder
+# that would otherwise grow without bound, and a `Retry-After` value the source
+# is entitled to send but we are not obliged to sit through. A dump that is 20
+# seconds away is better refused than waited for — the caller has its own
+# timeout.
+_MAX_DELAY_SECONDS = 20.0
+
+# Jitter spread. Without it every client that hit the same outage retries in
+# lockstep, and the load returns as a wave exactly when the source recovers —
+# the retry storm extends the outage it was meant to bridge.
+_JITTER_SPREAD = 0.5  # exponential delays land in [0.5x, 1.5x]
+
+# Applied on top of a `Retry-After` value, and deliberately one-sided: the
+# source told us when to come back, so coming back *later* is fine and coming
+# back *earlier* is not.
+_RETRY_AFTER_JITTER = 0.25  # lands in [1.0x, 1.25x]
+
+# Statuses that carry a meaningful `Retry-After` (RFC 9110 §10.2.3). A 429 or a
+# 503 is the source saying "not now, try at T" — an answer to the very question
+# the backoff curve is guessing at.
+_RETRY_AFTER_STATUSES = frozenset({429, 503})
+
+
+def parse_retry_after(resp: httpx.Response | None) -> float | None:
+    """Seconds to wait per the response's ``Retry-After``, or None.
+
+    RFC 9110 §10.2.3 allows two forms: delta-seconds (``120``) and an HTTP-date
+    (``Wed, 21 Oct 2026 07:28:00 GMT``). Both appear in the wild, so both are
+    read. Anything unparseable yields None and the caller falls back to its own
+    curve — a malformed header must not become a crash on the error path.
+    """
+    if resp is None or resp.status_code not in _RETRY_AFTER_STATUSES:
+        return None
+    raw = (resp.headers.get("Retry-After") or "").strip()
+    if not raw:
+        return None
+    if raw.isdigit():
+        return float(raw)
+    try:
+        when = parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        return None
+    if when is None:
+        return None
+    if when.tzinfo is None:  # RFC 9110 dates are GMT; a naive one means UTC
+        when = when.replace(tzinfo=UTC)
+    # Never negative: a date in the past means "now".
+    return max(0.0, (when - datetime.now(UTC)).total_seconds())
+
 
 @dataclass
 class _CacheEntry:
@@ -171,12 +230,26 @@ class EFVClient:
             await self._http.aclose()
         self._http = None
 
+    def _delay(self, attempt: int, last_error: Exception | None) -> float:
+        """Seconds to wait before ``attempt`` (ARCH-014).
+
+        The source's own answer beats our guess: if it sent ``Retry-After`` on a
+        429 or 503, that value wins over the exponential curve. Everything is
+        capped and spread — see the constants above for why each matters.
+        """
+        hinted = parse_retry_after(getattr(last_error, "response", None))
+        if hinted is not None:
+            capped = min(hinted, _MAX_DELAY_SECONDS)
+            return capped * (1.0 + random.random() * _RETRY_AFTER_JITTER)
+        capped = min(self.backoff_base**attempt, _MAX_DELAY_SECONDS)
+        return capped * (1.0 - _JITTER_SPREAD + random.random() * 2 * _JITTER_SPREAD)
+
     async def _fetch_with_retry(self, http: httpx.AsyncClient, url: str) -> httpx.Response:
         assert_host_allowed(url)  # SEC-021: enforce egress allow-list before any request
         last_error: Exception | None = None
-        for attempt in range(4):
+        for attempt in range(_ATTEMPTS):
             if attempt > 0:
-                await asyncio.sleep(self.backoff_base**attempt)  # 2s, 4s, 8s in prod
+                await asyncio.sleep(self._delay(attempt, last_error))
             try:
                 resp = await http.get(url)
                 # SEC-004: a redirect must not smuggle egress off the allow-list.
@@ -196,7 +269,7 @@ class EFVClient:
         # from a broken URL at a glance.
         detail = str(last_error) or "no further detail"
         raise RuntimeError(
-            f"Upstream unreachable after 4 attempts: {type(last_error).__name__}: "
+            f"Upstream unreachable after {_ATTEMPTS} attempts: {type(last_error).__name__}: "
             f"{detail} (host={urlsplit(url).hostname})"
         ) from last_error
 
