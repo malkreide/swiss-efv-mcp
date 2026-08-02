@@ -262,10 +262,15 @@ class EFVClient:
         """
         hinted = parse_retry_after(getattr(last_error, "response", None))
         if hinted is not None:
-            capped = min(hinted, _MAX_DELAY_SECONDS)
-            return capped * (1.0 + random.random() * _RETRY_AFTER_JITTER)
-        capped = min(self.backoff_base**attempt, _MAX_DELAY_SECONDS)
-        return capped * (1.0 - _JITTER_SPREAD + random.random() * 2 * _JITTER_SPREAD)
+            jittered = hinted * (1.0 + random.random() * _RETRY_AFTER_JITTER)
+        else:
+            jittered = self.backoff_base**attempt * (
+                1.0 - _JITTER_SPREAD + random.random() * 2 * _JITTER_SPREAD
+            )
+        # Cap *after* jitter. The other order made `_MAX_DELAY_SECONDS` not a
+        # bound at all: a value capped at 20s was then multiplied by up to 1.5
+        # and landed at 30s. The constant claimed a ceiling it did not hold.
+        return min(jittered, _MAX_DELAY_SECONDS)
 
     async def _fetch_with_retry(self, http: httpx.AsyncClient, url: str) -> httpx.Response:
         assert_host_allowed(url)  # SEC-021: enforce egress allow-list before any request
@@ -285,14 +290,22 @@ class EFVClient:
                 break
             attempts += 1
             try:
-                # The budget wins over the per-operation ceiling once it is the
-                # tighter of the two — otherwise a single slow attempt could
-                # outlast the whole allowance.
-                resp = await http.get(url, timeout=min(self.timeout, remaining))
-                # SEC-004: a redirect must not smuggle egress off the allow-list.
-                assert_host_allowed(str(resp.url))
-                resp.raise_for_status()
-                return resp
+                # httpx applies its timeout per operation (connect/read/write/
+                # pool) and the read timeout restarts with every chunk — that
+                # bounds each step, not the call, so a slowly trickling response
+                # could outlast the budget without any single read timing out.
+                # `asyncio.timeout` is the wall-clock deadline the budget
+                # actually promises; the httpx timeout stays alongside it as the
+                # finer per-operation bound.
+                async with asyncio.timeout(remaining):
+                    resp = await http.get(url, timeout=min(self.timeout, remaining))
+                    # SEC-004: a redirect must not smuggle egress off the allow-list.
+                    assert_host_allowed(str(resp.url))
+                    resp.raise_for_status()
+                    return resp
+            except TimeoutError as exc:  # budget gone, not just this attempt
+                last_error = exc
+                break
             except (httpx.HTTPStatusError, httpx.RequestError) as exc:
                 last_error = exc
                 status = getattr(getattr(exc, "response", None), "status_code", None)
