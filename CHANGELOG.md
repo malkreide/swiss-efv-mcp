@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Hinzugefuegt
+
+- **`Retry-After` wird gelesen und schlaegt die eigene Backoff-Kurve** (ARCH-014).
+  Bei 429 und 503 sagt die Quelle im Header, wann sie wieder mag — als
+  Sekundenzahl oder als HTTP-Datum; beide Formen kommen vor, beide werden
+  gelesen (RFC 9110 §10.2.3). Wer stattdessen seine eigene Kurve faehrt,
+  ignoriert eine ausdrueckliche Angabe, und ein Anbieter, der zweimal ignoriert
+  wird, sperrt. Ein unbrauchbarer Header fuehrt zu `None` und damit zurueck auf
+  die Kurve — eine kaputte Kopfzeile darf auf dem Fehlerpfad nicht zum Absturz
+  werden.
+
+- **Backoff ist gestreut (Jitter).** `2**attempt` war deterministisch: Faellt die
+  Quelle aus, waehrend mehrere Clients sie abfragen, laufen deren Retries im
+  Gleichtakt, und die Last kommt als Welle zurueck — genau wenn die Quelle sich
+  erholt. Der Retry-Sturm verlaengert den Ausfall, den er ueberbruecken soll.
+  Exponentielle Wartezeiten landen jetzt in `[0.5x, 1.5x]`.
+
+  Auf einem `Retry-After` ist die Streuung **einseitig** (`[1.0x, 1.25x]`): Die
+  Quelle hat gesagt, wann wir wiederkommen sollen — spaeter ist hoeflich,
+  frueher waere die Missachtung derselben Angabe, die man gerade liest.
+
+- **Deckel von 20 s auf jede einzelne Wartezeit.** Betrifft beides: eine
+  Exponentialleiter, die sonst unbegrenzt waechst, und ein `Retry-After`, das
+  die Quelle senden darf, das man aber nicht absitzen muss. `backoff_base=0`
+  bleibt instant — die Testsuite wartet weiterhin nicht.
+
+  Bekannte Luecke: Ein **Gesamtbudget** in Sekunden, das unter dem Timeout des
+  aufrufenden MCP-Clients liegt, fehlt weiterhin (ARCH-014). Der Deckel begrenzt
+  jede Wartezeit einzeln, nicht ihre Summe; im schlimmsten Fall sind das vier
+  Versuche a 60 s Timeout plus Backoff. Das nachzuziehen heisst, eine Annahme
+  ueber das Client-Timeout zu treffen, und aendert das Produktionsverhalten
+  spuerbar — deshalb hier bewusst nicht mitgenommen.
+
 ### Behoben
 
 - **Fehlermeldung bei unerreichbarem Upstream nannte den Fehler nicht.**
