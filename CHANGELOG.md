@@ -33,12 +33,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   die Quelle senden darf, das man aber nicht absitzen muss. `backoff_base=0`
   bleibt instant — die Testsuite wartet weiterhin nicht.
 
-  Bekannte Luecke: Ein **Gesamtbudget** in Sekunden, das unter dem Timeout des
-  aufrufenden MCP-Clients liegt, fehlt weiterhin (ARCH-014). Der Deckel begrenzt
-  jede Wartezeit einzeln, nicht ihre Summe; im schlimmsten Fall sind das vier
-  Versuche a 60 s Timeout plus Backoff. Das nachzuziehen heisst, eine Annahme
-  ueber das Client-Timeout zu treffen, und aendert das Produktionsverhalten
-  spuerbar — deshalb hier bewusst nicht mitgenommen.
+- **Gesamtbudget von 25 s ueber den ganzen Aufruf** (ARCH-014). Eine Anzahl
+  Versuche ist keine Grenze: Vier Versuche a 60 s Timeout plus Backoff sind
+  ueber vier Minuten, und die Zahl `4` sagt das nirgends. Entscheidender ist,
+  dass die massgebliche Grenze gar nicht uns gehoert — der Aufrufer hat sein
+  eigenes Timeout, und jenseits davon hoert niemand mehr zu: Die Arbeit laeuft
+  weiter, die Last landet bei der Quelle, das Ergebnis geht ins Leere.
+
+  Der Anker ist gemessen, nicht geschaetzt: Das Python-MCP-SDK setzt
+  `MCP_DEFAULT_TIMEOUT = 30.0` fuer allgemeine Operationen
+  (`mcp/shared/_httpx_utils.py`). 25 s lassen Luft fuer MCP-Framing,
+  CSV-Parsing und die Tool-Schicht oberhalb des Fetch. Ein Test haelt die
+  Beziehung fest und schlaegt an, wenn das SDK seinen Default senkt.
+
+  Geprueft wird vor jedem Versuch: Eine Wartezeit, die das Budget ueberdauern
+  wuerde, wird nicht mehr angetreten, und das Timeout eines einzelnen Versuchs
+  ist auf die verbleibende Zeit geklemmt. Die Meldung nennt neu, **welche**
+  Grenze gegriffen hat — «all 4 attempts used» und «25s budget spent» verlangen
+  verschiedene Antworten.
+
+  Der Standardwert von `timeout` faellt von 60 s auf 25 s: Ein Wert oberhalb des
+  Budgets haette nur noch behauptet, was er nicht mehr gewaehrt.
+
+  Die Abwaegung ist bewusst: Ein langsamer erster Versuch kann jetzt das Budget
+  aufbrauchen und laesst dann keinen Retry mehr zu. Genau das ist die
+  beabsichtigte Antwort — ein Retry, der nach dem Aufgeben des Aufrufers fertig
+  wird, bringt niemandem etwas und kostet die Quelle eine Anfrage.
 
 ### Behoben
 
