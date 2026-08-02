@@ -35,7 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "pytest-asyncio>=0.23",
+    "pytest-asyncio>=0.24",  # loop_scope= on pytest_asyncio.fixture (tests/test_live.py)
     "respx>=0.21",
     "ruff>=0.5",
 ]

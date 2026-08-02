@@ -10,6 +10,9 @@ on:
 jobs:
   live:
     runs-on: ubuntu-latest
+    # Backstop: the suite finishes in seconds when upstream answers and in about
+    # a minute when it does not. Anything beyond this is a hang, not a slow run.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
