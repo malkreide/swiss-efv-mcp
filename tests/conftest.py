@@ -15,10 +15,10 @@ BUDGET_CSV = (
     "topic,variable_id,variable_name,unit,year,value,category_level,"
     "category_level_1,category_level_2,category_level_3,category_level_4,"
     "category_level_5,category_level_6,category_level_7,category_level_8,path\n"
-    'Ausgaben nach Aufgabengebiet,1,Total,CHF,2024,84000.0,1,Total,,,,,,,,Total\n'
-    'Ausgaben nach Aufgabengebiet,2,Soziale Wohlfahrt,CHF,2024,32000.0,2,Total,'
+    "Ausgaben nach Aufgabengebiet,1,Total,CHF,2024,84000.0,1,Total,,,,,,,,Total\n"
+    "Ausgaben nach Aufgabengebiet,2,Soziale Wohlfahrt,CHF,2024,32000.0,2,Total,"
     "Soziale Wohlfahrt,,,,,,,Total / Soziale Wohlfahrt\n"
-    'Ausgaben nach Aufgabengebiet,3,Finanzen und Steuern,CHF,2024,11000.0,2,Total,'
+    "Ausgaben nach Aufgabengebiet,3,Finanzen und Steuern,CHF,2024,11000.0,2,Total,"
     "Finanzen und Steuern,,,,,,,Total / Finanzen und Steuern\n"
 )
 

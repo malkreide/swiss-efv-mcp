@@ -120,9 +120,7 @@ def test_cors_origins_accepts_csv(monkeypatch):
 
 @respx.mock
 async def test_client_is_reused_across_loads():
-    respx.get(DATASETS["headline"].url).mock(
-        return_value=httpx.Response(200, text="a,b\n1,2\n")
-    )
+    respx.get(DATASETS["headline"].url).mock(return_value=httpx.Response(200, text="a,b\n1,2\n"))
     c = EFVClient()
     await c.load("headline")
     first = c._http
@@ -145,9 +143,7 @@ async def test_execution_error_is_isError_not_leaking(monkeypatch):
     )
     monkeypatch.setattr(server_client, "backoff_base", 0)
     async with Client(mcp) as c:
-        res = await c.call_tool(
-            "fiscal_headline", {"variable": "saldo"}, raise_on_error=False
-        )
+        res = await c.call_tool("fiscal_headline", {"variable": "saldo"}, raise_on_error=False)
     assert res.is_error is True  # execution error -> isError tool-result
     assert "secret detail" not in str(res.content)  # masked (mask_error_details)
     assert "10.0.0.5" not in str(res.content)

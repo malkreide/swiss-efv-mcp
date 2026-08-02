@@ -118,9 +118,7 @@ class TestDelay:
         draws = {c._delay(2, None) for _ in range(30)}
         assert len(draws) > 1, "delay is deterministic — jitter is not applied"
         base = 2.0**2
-        assert all(
-            base * (1 - _JITTER_SPREAD) <= d <= base * (1 + _JITTER_SPREAD) for d in draws
-        )
+        assert all(base * (1 - _JITTER_SPREAD) <= d <= base * (1 + _JITTER_SPREAD) for d in draws)
 
     def test_zero_backoff_base_stays_instant(self):
         """Tests set backoff_base=0; jitter must not reintroduce a wait."""
@@ -161,9 +159,7 @@ async def test_429_without_header_falls_back_to_the_curve(monkeypatch):
         slept.append(seconds)
 
     monkeypatch.setattr("swiss_efv_mcp.client.asyncio.sleep", _capture)
-    respx.get(URL).mock(
-        side_effect=[_resp(429), httpx.Response(200, text=FIXTURES["headline"])]
-    )
+    respx.get(URL).mock(side_effect=[_resp(429), httpx.Response(200, text=FIXTURES["headline"])])
     c = EFVClient(backoff_base=2.0)
     await c.load("headline")
     assert len(slept) == 1

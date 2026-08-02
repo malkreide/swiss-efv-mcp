@@ -112,8 +112,12 @@ async def headline_impl(
             f"model={model!r}. Call fiscal_list_dimensions to see the valid values."
         )
     return HeadlineSeries(
-        provenance=prov, variable=variable, household=household, model=model,
-        points=points, note=note,
+        provenance=prov,
+        variable=variable,
+        household=household,
+        model=model,
+        points=points,
+        note=note,
     )
 
 
