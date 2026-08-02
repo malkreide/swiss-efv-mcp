@@ -98,19 +98,32 @@ class TestDelay:
             assert c._delay(1, exc) >= 5.0
 
     def test_absurd_retry_after_is_capped(self):
-        # A day is a value the source may legitimately send; sitting through it
-        # is not. Both bounds matter: the upper one proves the cap binds, the
-        # lower one proves the header was read at all — without it the bare
-        # curve's 2s would satisfy the assertion and the test would prove
-        # nothing.
+        # Exactly the cap, not "the cap times jitter": capping happens after
+        # jitter, otherwise `_MAX_DELAY_SECONDS` would not be a bound at all.
+        # Equality still discriminates — the bare curve gives 2s here.
         c = EFVClient(backoff_base=2.0)
         exc = httpx.HTTPStatusError("503", request=None, response=_resp(503, "86400"))
-        delay = c._delay(1, exc)
-        assert _MAX_DELAY_SECONDS <= delay <= _MAX_DELAY_SECONDS * (1 + _RETRY_AFTER_JITTER)
+        assert c._delay(1, exc) == _MAX_DELAY_SECONDS
 
     def test_exponential_ladder_is_capped(self):
         c = EFVClient(backoff_base=10.0)  # 10**3 = 1000s without a cap
-        assert c._delay(3, None) <= _MAX_DELAY_SECONDS * (1 + _JITTER_SPREAD)
+        for _ in range(30):
+            assert c._delay(3, None) <= _MAX_DELAY_SECONDS
+
+    def test_the_cap_is_a_real_bound_not_a_midpoint(self):
+        """`_MAX_DELAY_SECONDS` must hold even when jitter swings up.
+
+        Capping before jitter let a 20s ceiling grow to 30s on the exponential
+        path and 25s on the `Retry-After` path — the constant claimed a bound it
+        did not hold. Found by a Codex review on `parlament-mcp#35`, on the same
+        pattern this file introduced.
+        """
+        c = EFVClient(backoff_base=10.0)
+        exc = httpx.HTTPStatusError("429", request=None, response=_resp(429, "86400"))
+        for attempt in range(1, 6):
+            for _ in range(20):
+                assert c._delay(attempt, None) <= _MAX_DELAY_SECONDS
+                assert c._delay(attempt, exc) <= _MAX_DELAY_SECONDS
 
     def test_delay_is_spread(self):
         """Without jitter every client retries in lockstep. Two draws must differ."""
@@ -268,3 +281,33 @@ def test_default_budget_stays_under_the_mcp_client_default():
 
     assert _TOTAL_BUDGET_SECONDS < MCP_DEFAULT_TIMEOUT
     assert EFVClient().timeout <= _TOTAL_BUDGET_SECONDS
+
+
+@respx.mock
+async def test_a_slow_response_is_cut_by_the_wall_clock_deadline():
+    """The budget must bind even when the httpx timeout never fires.
+
+    httpx applies its timeout per operation and the read timeout restarts with
+    every chunk, so a slowly trickling response can outlast the total budget
+    without any single read timing out. The comment above `timeout` in
+    `client.py` said exactly that — and the budget was advertised anyway.
+
+    Deliberately without `fake_clock`: this guarantee is about real time, and a
+    clock that only moves when something sleeps cannot refute it. That blind
+    spot is why the counter-checks missed this.
+    """
+    import asyncio as real_asyncio
+    import time as real_time
+
+    async def _slow(request):
+        await real_asyncio.sleep(1.0)
+        return httpx.Response(200, text=FIXTURES["headline"])
+
+    respx.get(URL).mock(side_effect=_slow)
+    c = EFVClient(total_budget=0.05)
+    started = real_time.monotonic()
+    with pytest.raises(RuntimeError):
+        await c.load("headline")
+    elapsed = real_time.monotonic() - started
+    assert elapsed < 0.5, f"deadline did not cut: {elapsed:.2f}s"
+    await c.aclose()
