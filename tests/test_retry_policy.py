@@ -28,6 +28,8 @@ from swiss_efv_mcp.client import (
     _TOTAL_BUDGET_SECONDS,
     DATASETS,
     EFVClient,
+    UpstreamError,
+    UpstreamNotAttemptedError,
     parse_retry_after,
 )
 from tests.conftest import FIXTURES
@@ -311,3 +313,46 @@ async def test_a_slow_response_is_cut_by_the_wall_clock_deadline():
     elapsed = real_time.monotonic() - started
     assert elapsed < 0.5, f"deadline did not cut: {elapsed:.2f}s"
     await c.aclose()
+
+
+# --- The error is typed, not bare -------------------------------------------
+#
+# `reference/adoption.toml` in mcp-data-source-probe-skill declares
+# `no_bare_runtime_error` — "fails with a typed upstream error a caller can
+# branch on" — as a property every adoption of the retry template must hold.
+# Read against the servers on 2026-08-07, this module was the ONE that did not:
+# it raised `RuntimeError` twice while being cited as the model the template was
+# repaired against. These two tests are what stops that from coming back.
+
+
+@respx.mock
+async def test_exhaustion_raises_a_typed_error_not_a_bare_runtime_error():
+    """A bare RuntimeError is indistinguishable from a bug in this server.
+
+    That is the entire cost of the defect: a caller that wants to serve a stale
+    cache when the source is down cannot tell "the source is down" from "we have
+    a defect", so it catches both or neither.
+    """
+    respx.get(DATASETS["headline"].url).mock(side_effect=httpx.ConnectTimeout(""))
+    c = EFVClient(backoff_base=0)
+    with pytest.raises(UpstreamError) as exc_info:
+        await c.load("headline")
+    assert type(exc_info.value) is UpstreamError, "must not be a bare RuntimeError"
+    # Still a RuntimeError subclass — the change is additive, and every existing
+    # `except RuntimeError` keeps working.
+    assert isinstance(exc_info.value, RuntimeError)
+
+
+@respx.mock
+async def test_a_spent_budget_before_the_first_request_has_its_own_type(fake_clock):
+    """Nothing was asked of the source, so this says nothing about its health.
+
+    A caller retrying on `UpstreamError` would be retrying a timeout that never
+    reached the network — hence the distinct type.
+    """
+    respx.get(DATASETS["headline"].url).mock(side_effect=httpx.ConnectTimeout(""))
+    c = EFVClient(backoff_base=0, total_budget=0.0)
+    with pytest.raises(UpstreamNotAttemptedError) as exc_info:
+        await c.load("headline")
+    assert isinstance(exc_info.value, UpstreamError)
+    assert "budget already spent" in str(exc_info.value)
