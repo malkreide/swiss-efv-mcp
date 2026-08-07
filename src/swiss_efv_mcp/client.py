@@ -188,6 +188,37 @@ _RETRY_AFTER_JITTER = 0.25  # lands in [1.0x, 1.25x]
 _RETRY_AFTER_STATUSES = frozenset({429, 503})
 
 
+class UpstreamError(RuntimeError):
+    """The source could not be reached, and the retries are spent.
+
+    Named, not bare. This module was the reference the portfolio's retry
+    template was repaired against on 2026-08-07, and the manifest that describes
+    that template (``reference/adoption.toml`` in ``mcp-data-source-probe-skill``)
+    declares ``no_bare_runtime_error`` — «fails with a typed upstream error a
+    caller can branch on» — as a property every adoption must hold. Read against
+    the servers, this file was the one that did not: it raised ``RuntimeError``
+    twice while being cited as the model for everyone else.
+
+    A bare ``RuntimeError`` cannot be told apart from a bug in this server's own
+    code, and that is the whole cost. A caller who wants to serve a stale cache
+    when the source is down has no way to distinguish "the source is down" from
+    "we have a defect", so it ends up catching both or neither.
+
+    Deliberately a ``RuntimeError`` subclass: every existing
+    ``except RuntimeError`` keeps working, so this is additive, not a break.
+    """
+
+
+class UpstreamNotAttemptedError(UpstreamError):
+    """The budget was gone before a single request went out.
+
+    Its own type because the remedy differs. Nothing was asked of the source, so
+    this says something about our budget, not about the source's health — a
+    caller retrying on ``UpstreamError`` would be retrying a timeout that never
+    reached the network.
+    """
+
+
 def parse_retry_after(resp: httpx.Response | None) -> float | None:
     """Seconds to wait per the response's ``Retry-After``, or None.
 
@@ -312,7 +343,7 @@ class EFVClient:
                 if status is not None and 400 <= status < 500 and status != 429:
                     raise
         if last_error is None:  # budget gone before a single request went out
-            raise RuntimeError(
+            raise UpstreamNotAttemptedError(
                 f"Upstream not attempted: {self.total_budget:g}s budget already spent "
                 f"(host={urlsplit(url).hostname})"
             )
@@ -331,7 +362,7 @@ class EFVClient:
             else f"{self.total_budget:g}s budget spent"
         )
         detail = str(last_error) or "no further detail"
-        raise RuntimeError(
+        raise UpstreamError(
             f"Upstream unreachable after {attempts} attempt(s), {why}: "
             f"{type(last_error).__name__}: {detail} (host={urlsplit(url).hostname})"
         ) from last_error

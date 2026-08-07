@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Behoben
 
+- **`_fetch_with_retry` warf zweimal ein nacktes `RuntimeError` — jetzt einen
+  eigenen Typ.** Dieses Modul ist die Referenz, gegen die die Retry-Vorlage des
+  Portfolios am 7.8.2026 repariert wurde
+  ([mcp-data-source-probe-skill#24](https://github.com/malkreide/mcp-data-source-probe-skill/pull/24)).
+  Das Manifest, das die Vorlage beschreibt, deklariert `no_bare_runtime_error` —
+  «fails with a typed upstream error a caller can branch on» — als Eigenschaft,
+  die jede Übernahme halten muss. Gegen die siebzehn Server gelesen war dieses
+  Modul **das einzige**, das sie verletzte: Es wirft `RuntimeError`, während es
+  als Vorbild für alle anderen zitiert wird.
+
+  Der Preis ist konkret: Ein nacktes `RuntimeError` lässt sich nicht von einem
+  Bug in diesem Server unterscheiden. Wer bei Ausfall der Quelle einen alten
+  Cache ausliefern will, kann «die Quelle ist unten» nicht von «wir haben einen
+  Defekt» trennen — und fängt am Ende beides oder keines.
+
+  Neu:
+  - `UpstreamError(RuntimeError)` — Quelle nicht erreichbar, Retries verbraucht.
+  - `UpstreamNotAttemptedError(UpstreamError)` — das Budget war weg, bevor ein
+    einziger Request rausging. Eigener Typ, weil die Abhilfe eine andere ist:
+    Der Quelle wurde nichts abverlangt, das sagt also etwas über unser Budget,
+    nicht über ihren Zustand.
+
+  **Additiv, kein Bruch:** Beide erben von `RuntimeError`, jedes bestehende
+  `except RuntimeError` läuft unverändert weiter. Die Meldungen selbst sind
+  unangetastet — sie nannten Typ, Host und ausgegangenes Limit schon vorher
+  richtig; es fehlte nur der Typ der Exception.
+
+  Zwei Tests sichern das zu: dass die Erschöpfung `UpstreamError` und **nicht**
+  bloss `RuntimeError` ist, und dass der Fall ohne einen einzigen Versuch seinen
+  eigenen Typ hat.
+
 - **Der 20-Sekunden-Deckel war keine Grenze.** Gedeckelt wurde *vor* dem
   Jittern, also wurde ein auf `_MAX_DELAY_SECONDS` gedeckelter Wert
   anschliessend mit bis zu 1.5 multipliziert: exponentielle Wartezeiten bis
