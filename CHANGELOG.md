@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Aufgezeichnete Fixtures, eine je externem Datensatz, mit Nachweis.**
+  `tests/fixtures/` haelt jetzt echte Ausschnitte aller drei Datensaetze —
+  `headline`, `budget`, `institutions` —, aufgezeichnet von
+  `scripts/record_fixtures.py`. Herkunft, Datum, Auswahlregel und SHA-256
+  stehen je Datei in `tests/fixtures/PROVENANCE.md`, wie im uebrigen Portfolio.
+
+  Die Quelldateien sind 0.5 bis 5 MB gross, aufgezeichnet ist je die
+  **unveraenderte Kopfzeile** und eine Auswahl Zeilen; keine Spalte entfernt.
+  Die Zeilen sind gewaehlt, nicht genommen: `budget.csv` beginnt in der Quelle
+  ausschliesslich mit Hierarchie-Ebene 1, obwohl der Client bis Ebene 8 parst,
+  und `headline.csv` enthaelt in den ersten tausend Zeilen keine der
+  `NA`-Zeilen, auf die `_NULLISH` reagiert. Zusaetzlich haelt die Auswahl
+  Thema und Jahr zusammen, sonst waere der Ausschnitt nicht abfragbar.
+
+- **Die handgeschriebenen Szenario-CSVs sind jetzt an die Quelle gebunden.**
+  `test_die_handgeschriebenen_koepfe_stimmen_mit_der_quelle` vergleicht ihre
+  Kopfzeilen mit den aufgezeichneten. Sie bleiben — sie kodieren bewusste
+  Szenarien —, konnten ihre eigene Satzform aber nicht belegen: sie brachten
+  ihre Kopfzeile selbst mit und stimmten damit sich selbst zu. Geprueft ergab
+  der Vergleich, dass alle drei Koepfe heute exakt stimmen; neu ist, dass eine
+  Umbenennung in der Quelle auffaellt statt still weiterzulaufen.
+
+  Gegenprobe: Aufnahmedatum entfernt -> Datums-Check faellt; Spalte umbenannt ->
+  Bruecken-Test und Ebenen-Test fallen; nur Ebene 1 behalten (naive Kopfauswahl)
+  -> Ebenen-Test faellt; `NA`-Zeile entfernt -> headline-Test faellt.
+
 ### Behoben
 
 - **`_fetch_with_retry` warf zweimal ein nacktes `RuntimeError` — jetzt einen
