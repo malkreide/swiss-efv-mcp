@@ -40,12 +40,16 @@ Ein Codex-Review auf einem PR wird beantwortet oder behoben, nie ignoriert.
 
 ## Dieses Repo
 
-**ruff: gepinnt auf `0.16.1`**, an zwei Stellen — `.github/workflows/ci.yml`
-und das `dev`-Extra in `pyproject.toml`. `pip install -e ".[dev]"` fährt
-damit dieselbe Version wie das Gate. Beim Anheben beide Stellen ändern.
+**ruff:** genau eine Quelle — `ruff==0.16.1` im `dev`-Extra von
+`pyproject.toml`. `pip install -e ".[dev]"` reicht also, lokal wie in der CI.
+Keine zweite Version in die Workflows schreiben: ein solcher Schritt läuft
+nach dem dev-Install und überstimmt den Pin still (`ci.yml` hatte einen;
+`test_werkzeug_versionen.py` hält beides fest). Ein `.pre-commit-config.yaml`
+gibt es nicht.
+
 Lokal `python -m ruff` aufrufen, nicht `ruff` — ein `ruff` auf dem PATH
 kann eine ältere Version sein und meldet dann genau die Abweichungen,
-die niemand verursacht hat. Ein `.pre-commit-config.yaml` gibt es nicht.
+die niemand verursacht hat.
 
 Gates, wörtlich aus `ci.yml` (Matrix: Python 3.11 / 3.12 / 3.13):
 
