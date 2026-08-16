@@ -37,7 +37,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",  # loop_scope= on pytest_asyncio.fixture (tests/test_live.py)
     "respx>=0.21",
-    "ruff>=0.5",
+    "ruff==0.16.1",  # exakt die Version, die ci.yml faehrt — sonst meldet der lokale Lauf Abweichungen, die niemand verursacht hat
 ]
 otel = [
     "opentelemetry-sdk>=1.20",
