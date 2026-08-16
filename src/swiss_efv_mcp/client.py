@@ -37,6 +37,20 @@ from .logging_config import get_logger
 
 _log = get_logger(__name__)
 
+# --- The two seams a test may take over -------------------------------------
+# The retry loop's wait and its clock, each under a name of this module's own.
+# A test that instead patches `client.asyncio.sleep` or `client.time.monotonic`
+# reaches the *stdlib module* — `client.asyncio` is `asyncio` — and replaces the
+# function for the whole process, not for this loop.
+#
+# For the clock that is not a style question. `asyncio`'s event loop reads
+# `time.monotonic` from the same module object, so a frozen clock stops the loop:
+# every `asyncio.sleep` and every `asyncio.timeout` scheduled while it is frozen
+# waits for a moment that never comes. The `asyncio.timeout` on the budget below
+# is then out of force in exactly those tests that mean to check the budget.
+_sleep = asyncio.sleep
+_monotonic = time.monotonic
+
 # --- Egress allow-list (SEC-021 / SEC-004) ----------------------------------
 # The server reaches exactly two EFV hosts. The allow-list is an immutable
 # module-level frozenset — not configurable or mutable at runtime — and is
@@ -305,7 +319,7 @@ class EFVClient:
 
     async def _fetch_with_retry(self, http: httpx.AsyncClient, url: str) -> httpx.Response:
         assert_host_allowed(url)  # SEC-021: enforce egress allow-list before any request
-        deadline = time.monotonic() + self.total_budget
+        deadline = _monotonic() + self.total_budget
         last_error: Exception | None = None
         attempts = 0
         for attempt in range(_ATTEMPTS):
@@ -313,10 +327,10 @@ class EFVClient:
                 delay = self._delay(attempt, last_error)
                 # A wait that outlasts the budget is a wait for nobody: the
                 # caller has given up by the time it ends. Stop instead.
-                if delay >= deadline - time.monotonic():
+                if delay >= deadline - _monotonic():
                     break
-                await asyncio.sleep(delay)
-            remaining = deadline - time.monotonic()
+                await _sleep(delay)
+            remaining = deadline - _monotonic()
             if remaining <= 0:
                 break
             attempts += 1

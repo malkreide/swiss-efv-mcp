@@ -37,6 +37,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Behoben
 
+- **Die Fake-Uhr der Retry-Tests hielt die Event-Loop an — und damit genau die
+  Frist ausser Kraft, die sie prüfen sollte.** `fake_clock` setzte
+  `monkeypatch.setattr("swiss_efv_mcp.client.time.monotonic", …)`. Das liest
+  sich lokal und ist es nicht: `client.time` **ist** das stdlib-Modul, und
+  `asyncio` liest `time.monotonic` aus demselben Objekt. Eine eingefrorene Uhr
+  hält damit `loop.time()` an, und jede unter ihr geplante Frist wartet auf
+  einen Moment, der nie kommt.
+
+  Betroffen ist der Budget-Deckel selbst: `_fetch_with_retry` begrenzt jeden
+  Versuch mit `async with asyncio.timeout(remaining)` — der Wanduhr-Frist, die
+  das Budget verspricht. In allen vier `fake_clock`-Tests konnte diese Frist
+  **nie** auslösen. Gemeldet hat das nichts; die Tests waren grün. Sichtbar
+  wurde es erst, weil dieselbe Fixture zusätzlich `asyncio.sleep` prozessweit
+  ersetzte und die beiden Patches einander verdeckten: nimmt man den Schlaf-
+  Patch weg und lässt den Uhr-Patch stehen, hängt die Suite, statt zu fallen.
+
+  Beide Nahtstellen tragen jetzt einen Namen dieses Moduls — `client._sleep`
+  und `client._monotonic` —, und die Tests übernehmen diese statt der
+  stdlib-Funktionen. Das ist die Portfolio-Konvention aus `CLAUDE.md` Teil 1;
+  dieses Repo war neben `swiss-holidays-mcp` das letzte ohne sie.
+
+  Drei neue Zusicherungen: `test_die_fake_uhr_laesst_die_frist_der_event_loop_laufen`
+  (die zentrale — sie war vorher nicht formulierbar und fällt gegen den alten
+  Stand), `test_das_uebernehmen_der_naht_laesst_den_prozess_in_ruhe` und
+  `test_die_beiden_nahtstellen_gehoeren_dem_modul`, das die Schleife im
+  Quelltext liest, damit ein Rückfall auffällt statt still zu bestehen.
+
 - **`_fetch_with_retry` warf zweimal ein nacktes `RuntimeError` — jetzt einen
   eigenen Typ.** Dieses Modul ist die Referenz, gegen die die Retry-Vorlage des
   Portfolios am 7.8.2026 repariert wurde
