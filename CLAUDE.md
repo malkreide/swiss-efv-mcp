@@ -60,6 +60,12 @@ ruff format --check src/ tests/ scripts/
 python scripts/check_version_sync.py
 ```
 
+Alle vier laufen in einem Job auf allen drei Feldern — keine
+`if: matrix.python-version`-Ausnahme, kein zweiter lint-Job. Ein grünes 3.13
+heisst hier also wirklich, dass alles auf 3.13 lief; im Portfolio ist das
+nicht durchgehend so. Ein `fail-fast: false` steht **nicht** da: Eine rote
+3.11 bricht 3.12 und 3.13 ab, bevor sie etwas sagen.
+
 **Live-Tests: geplanter Workflow vorhanden** — `.github/workflows/live.yml`,
 cron `27 5 * * *` plus `workflow_dispatch`, mit Einordnung über
 `scripts/classify_live_run.py` und automatischem Issue. DRIFT-005 ist damit
