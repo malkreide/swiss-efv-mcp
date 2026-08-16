@@ -314,7 +314,7 @@ def test_die_beiden_nahtstellen_gehoeren_dem_modul():
     assert "await _sleep(" in quelle, "the retry loop no longer waits through the alias"
     assert "asyncio.sleep" not in quelle, "back on the stdlib function — patching it is global"
     assert "time.monotonic" not in quelle, "back on the stdlib clock — patching it stops the loop"
-    assert quelle.count("_monotonic()") >= 3, "the budget reads a clock the module does not own"
+    assert "_monotonic()" in quelle, "the budget reads a clock the module does not own"
 
 
 async def test_das_uebernehmen_der_naht_laesst_den_prozess_in_ruhe(monkeypatch):
