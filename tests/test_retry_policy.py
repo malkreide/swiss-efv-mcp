@@ -9,6 +9,13 @@ Three properties, each asserted in both directions where that is possible:
    come back in lockstep the moment the source recovers.
 3. Nothing waits unbounded. Neither the ladder nor a `Retry-After` the source
    is entitled to send may hold a tool call open indefinitely.
+
+The wait and the clock are taken over through `client._sleep` and
+`client._monotonic` — the module's own names — never through
+`client.asyncio.sleep` or `client.time.monotonic`. Those two read as local
+overrides and are not: `client.asyncio` *is* the stdlib module, so the
+replacement holds for the whole process. For the clock that is not cosmetic —
+see `test_die_fake_uhr_laesst_die_frist_der_event_loop_laufen`.
 """
 
 from __future__ import annotations
@@ -20,6 +27,7 @@ import httpx
 import pytest
 import respx
 
+from swiss_efv_mcp import client as client_mod
 from swiss_efv_mcp.client import (
     _ATTEMPTS,
     _JITTER_SPREAD,
@@ -152,7 +160,7 @@ async def test_retry_after_is_honoured_by_the_loop(monkeypatch):
     async def _capture(seconds):
         slept.append(seconds)
 
-    monkeypatch.setattr("swiss_efv_mcp.client.asyncio.sleep", _capture)
+    monkeypatch.setattr(client_mod, "_sleep", _capture)
     respx.get(URL).mock(
         side_effect=[
             _resp(429, "3"),
@@ -173,7 +181,7 @@ async def test_429_without_header_falls_back_to_the_curve(monkeypatch):
     async def _capture(seconds):
         slept.append(seconds)
 
-    monkeypatch.setattr("swiss_efv_mcp.client.asyncio.sleep", _capture)
+    monkeypatch.setattr(client_mod, "_sleep", _capture)
     respx.get(URL).mock(side_effect=[_resp(429), httpx.Response(200, text=FIXTURES["headline"])])
     c = EFVClient(backoff_base=2.0)
     await c.load("headline")
@@ -189,7 +197,7 @@ async def test_404_still_fails_fast_without_waiting(monkeypatch):
     async def _capture(seconds):
         slept.append(seconds)
 
-    monkeypatch.setattr("swiss_efv_mcp.client.asyncio.sleep", _capture)
+    monkeypatch.setattr(client_mod, "_sleep", _capture)
     route = respx.get(URL).mock(return_value=httpx.Response(404))
     c = EFVClient(backoff_base=2.0)
     with pytest.raises(httpx.HTTPStatusError):
@@ -224,8 +232,8 @@ def fake_clock(monkeypatch):
         slept.append(seconds)
         now["t"] += seconds
 
-    monkeypatch.setattr("swiss_efv_mcp.client.time.monotonic", lambda: now["t"])
-    monkeypatch.setattr("swiss_efv_mcp.client.asyncio.sleep", _sleep)
+    monkeypatch.setattr(client_mod, "_monotonic", lambda: now["t"])
+    monkeypatch.setattr(client_mod, "_sleep", _sleep)
     return {"advance": lambda s: now.update(t=now["t"] + s), "slept": slept}
 
 
@@ -283,6 +291,79 @@ def test_default_budget_stays_under_the_mcp_client_default():
 
     assert _TOTAL_BUDGET_SECONDS < MCP_DEFAULT_TIMEOUT
     assert EFVClient().timeout <= _TOTAL_BUDGET_SECONDS
+
+
+# --- The seams themselves ---------------------------------------------------
+#
+# The three tests below guard what the tests above stand on. Without them the
+# fixtures could go back to patching the stdlib module and every assertion here
+# would stay green while checking less than it claims.
+
+
+def test_die_beiden_nahtstellen_gehoeren_dem_modul():
+    """`_sleep` and `_monotonic` must be what the retry loop actually calls.
+
+    Read off the source, not off behaviour: a loop that goes back to
+    `asyncio.sleep(delay)` still passes every test above, because the fixture
+    then patches the stdlib function those tests observe. The difference only
+    shows in what *else* the patch takes down with it.
+    """
+    import inspect
+
+    quelle = inspect.getsource(EFVClient._fetch_with_retry)
+    assert "await _sleep(" in quelle, "the retry loop no longer waits through the alias"
+    assert "asyncio.sleep" not in quelle, "back on the stdlib function — patching it is global"
+    assert "time.monotonic" not in quelle, "back on the stdlib clock — patching it stops the loop"
+    assert "_monotonic()" in quelle, "the budget reads a clock the module does not own"
+
+
+async def test_das_uebernehmen_der_naht_laesst_den_prozess_in_ruhe(monkeypatch):
+    """Patching the seam must not replace the function for everyone else.
+
+    `monkeypatch.setattr("swiss_efv_mcp.client.asyncio.sleep", ...)` resolves
+    `client.asyncio` to the stdlib module and swaps `sleep` there — visible to
+    httpx, respx, anyio and every other test running in this process. The alias
+    is a name of this module; taking it over reaches exactly this loop.
+    """
+    import asyncio
+    import time
+
+    vorher_sleep, vorher_uhr = asyncio.sleep, time.monotonic
+
+    async def _nichts(_seconds: float) -> None:
+        pass
+
+    monkeypatch.setattr(client_mod, "_sleep", _nichts)
+    monkeypatch.setattr(client_mod, "_monotonic", lambda: 0.0)
+    assert client_mod._sleep is _nichts, "the seam was not taken over at all"
+    assert asyncio.sleep is vorher_sleep, "asyncio.sleep was replaced process-wide"
+    assert time.monotonic is vorher_uhr, "time.monotonic was replaced process-wide"
+
+
+async def test_die_fake_uhr_laesst_die_frist_der_event_loop_laufen(fake_clock):
+    """The clock the budget's `asyncio.timeout` runs on must keep running.
+
+    This is the assurance that was impossible before. The event loop reads
+    `time.monotonic` from the same module object, so freezing it there froze
+    `loop.time()` — and an `asyncio.timeout` scheduled under a stopped clock
+    waits for a moment that never arrives. The budget's wall-clock deadline in
+    `_fetch_with_retry` was therefore out of force in exactly the tests written
+    to check the budget, and nothing said so: they were green.
+
+    Falls the moment the fake clock reaches past this module again.
+    """
+    import asyncio
+
+    loop = asyncio.get_running_loop()
+    vorher = loop.time()
+    with pytest.raises(TimeoutError):
+        async with asyncio.timeout(0.05):
+            await asyncio.sleep(5.0)
+    verstrichen = loop.time() - vorher
+    assert 0.01 < verstrichen < 1.0, (
+        f"the loop clock advanced by {verstrichen} — not by real elapsed time"
+    )
+    assert fake_clock["slept"] == [], "the client did not run here; only the loop was measured"
 
 
 @respx.mock
