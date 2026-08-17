@@ -16,6 +16,31 @@ Ein gescheitertes `pip install`, ein Timeout, eine umbenannte Marke: alles
 Und ein Lauf, in dem jeder Test uebersprungen wurde, sieht unter jedem
 Exit-Code-Check aus wie Erfolg.
 
+DER TRANSPORTFEHLER
+-------------------
+Ein Timeout gehoert nach `unknown` — aber nur der Job-Timeout landete dort, weil
+dann kein XML entsteht. Erreicht die Suite die Quelle nicht, laufen die Tests
+und fallen um, das XML zaehlt Fehlschlaege, und die Einordnung las daraus einen
+gebrochenen Vertrag. Am 17.8.2026 gemessen: vier Fehlschlaege, alle
+`UpstreamError` nach einem TLS-Handshake-Timeout, ein Issue mit dem Titel «rot»
+— und die Quelle antwortete beim direkten Abruf danach mit 200 in 2,2s.
+
+Der Unterschied ist keine Nuance. «Der Vertrag hat sich geaendert» will einen
+Fix, «die Quelle war zwei Minuten aus» will nichts. Wer beides gleich meldet,
+bringt sich das Melden ab.
+
+Deshalb wird gefragt, WORAN die Tests gestorben sind. `EFVClient` wirft dafuer
+einen eigenen Typ (`UpstreamError`, «a caller can branch on»); genau darauf wird
+hier verzweigt. Sind ALLE Fehlschlaege Transportfehler, hat der Lauf ueber den
+Vertrag nichts festgestellt — `unknown`. Ist auch nur einer ein echter
+Fehlschlag, bleibt es `finding`: Der sagt etwas, das gesehen gehoert.
+
+Gelesen wird nur das `message`-Attribut, und der Typ muss dort vorne stehen.
+Eine Suche im Traceback waere gefaehrlich: `Failed: DID NOT RAISE UpstreamError`
+ist ein *echter* Fehlschlag, der den Namen nur erwaehnt. Ihn als Transport zu
+lesen hiesse, genau den Vertragsbruch zu verschlucken, fuer den es diese Suite
+gibt.
+
 Diese Einordnung entscheidet, ob ein Issue aufgeht oder zugeht. Sie in einen
 `run:`-Block zu schreiben hiesse, den einzigen Teil des Workflows, der etwas
 behauptet, an die einzige Stelle zu legen, an der ihn niemand testen kann.
@@ -51,12 +76,52 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 CLEAR = "clear"
 FINDING = "finding"
 UNKNOWN = "unknown"
+
+# Die Exceptions aus `swiss_efv_mcp.client`, die «nicht erreicht» heissen — und
+# damit: ueber den Vertrag ist nichts festgestellt. BEWUSST eine Liste und kein
+# `Upstream\w*Error`: Ein kuenftiger Typ, der einen Vertragsbruch benennt, wuerde
+# sonst still als Transportfehler durchgehen und das Issue unterdruecken, das er
+# ausloesen soll. Wer hier nichts eintraegt, bekommt `finding` — ein Issue zu
+# viel, nicht einen verschluckten Befund. `test_transport_typen.py` haelt die
+# Liste gegen `client.py` und faellt, sobald dort ein Typ dazukommt.
+_TRANSPORT_EXCEPTIONS = (
+    "swiss_efv_mcp.client.UpstreamError",
+    "swiss_efv_mcp.client.UpstreamNotAttemptedError",
+)
+
+# pytest schreibt den voll qualifizierten Typ an den ANFANG von `message`:
+#   <failure message="swiss_efv_mcp.client.UpstreamError: Upstream unreachable …">
+# Faellt eine Fixture, verpackt pytest dasselbe in:
+#   <error message='failed on setup with "swiss_efv_mcp.client.UpstreamError: …"'>
+# Beide Formen am 17.8.2026 gegen pytest 8 nachgemessen, nicht geraten. Der
+# Anker vorne ist die Sicherung gegen `Failed: DID NOT RAISE UpstreamError`.
+_TRANSPORT = re.compile(
+    r'^(?:failed on \w+ with ")?(?:'
+    + "|".join(re.escape(t) for t in _TRANSPORT_EXCEPTIONS)
+    + r"): "
+)
+
+
+def _fehlermeldungen(suites: list[ET.Element]) -> list[str]:
+    """Eine Meldung je `<failure>`/`<error>`, in XML-Reihenfolge.
+
+    Nur das `message`-Attribut, nie der Traceback-Text — siehe `DID NOT RAISE`
+    im Modul-Docstring. Fehlt das Attribut, steht hier `""`: unlesbar zaehlt als
+    nicht-Transport und damit als Befund, nicht als Entwarnung.
+    """
+    return [
+        el.get("message") or ""
+        for suite in suites
+        for case in suite.iter("testcase")
+        for el in (*case.findall("failure"), *case.findall("error"))
+    ]
 
 
 def classify(report: Path, pytest_exit: int | None = None) -> tuple[str, str]:
@@ -87,10 +152,24 @@ def classify(report: Path, pytest_exit: int | None = None) -> tuple[str, str]:
     )
 
     if failures or errors:
-        return (
-            FINDING,
-            f"{failures} Fehlschlag/Fehlschlaege und {errors} Fehler von {tests} Test(s)",
-        )
+        gezaehlt = failures + errors
+        gemeldet = _fehlermeldungen(suites)
+        transport = [m for m in gemeldet if _TRANSPORT.search(m)]
+        # `len(gemeldet) == gezaehlt` ist die Vorsichtsklausel: Zaehlen die
+        # Attribute mehr Fehler, als einzeln im XML stehen, ist ueber die
+        # ungesehenen nichts bekannt — und Unbekanntes darf ein Issue nicht
+        # unterdruecken. Dann bleibt es `finding`.
+        if gezaehlt and len(gemeldet) == gezaehlt and len(transport) == gezaehlt:
+            return (
+                UNKNOWN,
+                f"alle {gezaehlt} Fehlschlag/Fehlschlaege sind Transportfehler — die "
+                "Quelle war nicht erreichbar, ueber den Vertrag sagt dieser Lauf nichts",
+            )
+        rest = gezaehlt - len(transport)
+        woran = f"{failures} Fehlschlag/Fehlschlaege und {errors} Fehler von {tests} Test(s)"
+        if transport:
+            woran += f" (davon {len(transport)} Transport, {rest} inhaltlich)"
+        return FINDING, woran
     if tests == 0:
         return (
             UNKNOWN,
