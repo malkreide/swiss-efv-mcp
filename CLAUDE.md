@@ -69,6 +69,7 @@ Gates, wörtlich aus `ci.yml` (Matrix: Python 3.11 / 3.12 / 3.13):
 
 ```
 PYTHONPATH=src pytest tests/ -m "not live"
+python scripts/check_ruff_pin.py
 ruff check src/ tests/ scripts/
 ruff format --check src/ tests/ scripts/
 python scripts/check_version_sync.py
