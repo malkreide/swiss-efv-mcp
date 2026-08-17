@@ -20,6 +20,9 @@ on:
 permissions:
   contents: read
   issues: write
+  # Fuer die eigene Lauf-Historie: Aus ihr kommt die Serie, die einen
+  # Dauerausfall von einem kurzen Aussetzer trennt (`live_streak.py`).
+  actions: read
 
 concurrency:
   group: live-tests
@@ -68,6 +71,30 @@ jobs:
             echo "PYTEST_TAIL"
           } >> "$GITHUB_OUTPUT"
 
+      # Ein Ausfall der Quelle ist `unknown` und macht kein Issue auf — richtig
+      # fuer die zwei Minuten, in denen sie mal nicht antwortet, falsch fuer die
+      # Woche, in der sie weg ist. Die Serie trennt beides. Kein Zaehler wird
+      # gefuehrt: Der Workflow endet genau dann mit `success`, wenn die
+      # Einordnung `clear` war, also steht die Antwort in der Lauf-Historie.
+      - name: Lauf-Historie holen
+        id: historie
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runs = await github.rest.actions.listWorkflowRuns({
+              ...context.repo, workflow_id: 'live.yml',
+              branch: context.payload.repository.default_branch,
+              per_page: 20,
+            });
+            require('fs').writeFileSync('live-runs.json', JSON.stringify(runs.data));
+
+      - name: Serie einordnen
+        id: streak
+        run: |
+          python scripts/live_streak.py live-runs.json \
+            --state "${{ steps.verdict.outputs.state }}" \
+            --run-id "${{ github.run_id }}"
+
       - name: Issue oeffnen, aktualisieren oder schliessen
         uses: actions/github-script@v7
         # Ueber `env`, nicht ueber `${{ }}` im Skript: Die pytest-Ausgabe ist
@@ -78,11 +105,15 @@ jobs:
           LIVE_STATE: ${{ steps.verdict.outputs.state }}
           LIVE_REASON: ${{ steps.verdict.outputs.reason }}
           LIVE_TAIL: ${{ steps.verdict.outputs.tail }}
+          LIVE_STREAK: ${{ steps.streak.outputs.streak }}
+          LIVE_DAUERAUSFALL: ${{ steps.streak.outputs.dauerausfall }}
         with:
           script: |
             const state = process.env.LIVE_STATE;
             const reason = process.env.LIVE_REASON || '';
             const tail = process.env.LIVE_TAIL || '(keine Ausgabe)';
+            const streak = process.env.LIVE_STREAK || '?';
+            const dauerausfall = process.env.LIVE_DAUERAUSFALL === 'true';
             // Stabiles Praefix: Damit ein zweiter roter Lauf den bestehenden
             // Thread verlaengert statt einen zweiten aufzumachen. Zehn Issues
             // zur selben Sache liest niemand.
@@ -103,7 +134,7 @@ jobs:
               (i) => !i.pull_request && i.title.startsWith(PREFIX)
             );
 
-            if (state === 'unknown') {
+            if (state === 'unknown' && !dauerausfall) {
               // Weder oeffnen noch schliessen. Der Lauf hat nichts ueber den
               // Vertrag mit data.finance.admin.ch festgestellt, und ein Issue, das auf so
               // einen Lauf hin zugeht, behauptet einen Vergleich, den es nicht
@@ -111,8 +142,65 @@ jobs:
               //
               // Hier landet seit dem 17.8.2026 auch der Ausfall der Quelle: Sind
               // ALLE Fehlschlaege Transportfehler, war die Quelle nicht erreichbar
-              // — das ist kein Befund und macht keinen Thread auf.
+              // — das ist kein Befund und macht keinen Thread auf. Bis er anhaelt:
+              // ab dem dritten Lauf ohne Gruen faellt `dauerausfall` und es geht
+              // doch ein Issue auf, siehe unten.
               core.warning(`Live-Suite nicht ausgewertet: ${reason}. Am Issue wurde nichts geaendert.`);
+              return;
+            }
+
+            if (state === 'unknown') {
+              // Dauerausfall. Kein Vertragsbruch — aber ein Server, der seine
+              // Daten seit Tagen nicht laden kann, ist kaputt, auch wenn nicht
+              // er der Schuldige ist. Derselbe Thread wie beim Befund: Zwei
+              // Threads zur selben toten Quelle liest niemand.
+              const body = [
+                `Die Live-Suite ist seit **${streak} Laeufen** nicht mehr gruen, und jeder`,
+                'dieser Laeufe scheiterte am Transport: `data.finance.admin.ch` war nicht',
+                'erreichbar.',
+                '',
+                `Lauf: ${run}`,
+                `Einordnung: ${reason}`,
+                '',
+                '**Das ist kein gebrochener Vertrag.** Kein Feld hat sich bewegt, keine',
+                'Kopfzeile wurde umbenannt — die Quelle antwortet gar nicht. Ein einzelner',
+                'solcher Lauf oeffnet hier nichts; drei hintereinander schon, weil ein',
+                'Server, der seine Daten nicht mehr laden kann, kaputt ist, egal wer schuld',
+                'daran ist.',
+                '',
+                'Erste Schritte: den Dump von Hand abrufen und schauen, ob die Quelle',
+                'antwortet — nicht aus der Fehlermeldung schliessen. Antwortet sie wieder,',
+                'schliesst der naechste gruene Lauf dieses Issue von selbst.',
+                '',
+                '<details><summary>Letzte Zeilen der pytest-Ausgabe</summary>',
+                '',
+                '```',
+                tail,
+                '```',
+                '',
+                '</details>',
+              ].join('\n');
+
+              if (open) {
+                await github.rest.issues.createComment({
+                  ...context.repo, issue_number: open.number,
+                  body: `Weiterhin nicht erreichbar am ${heute} (${streak} Laeufe).\n\n${body}`,
+                });
+              } else {
+                try {
+                  await github.rest.issues.createLabel({
+                    ...context.repo, name: LABEL, color: 'd93f0b',
+                    description: 'Vertrag mit einer externen Quelle betroffen',
+                  });
+                } catch (e) {
+                  if (e.status !== 422) throw e;  // 422 = existiert bereits
+                }
+                await github.rest.issues.create({
+                  ...context.repo,
+                  title: `${PREFIX} — Quelle seit ${streak} Laeufen nicht erreichbar (${heute})`,
+                  body, labels: [LABEL],
+                });
+              }
               return;
             }
 
