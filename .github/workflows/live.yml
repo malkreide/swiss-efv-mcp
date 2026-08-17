@@ -108,6 +108,10 @@ jobs:
               // Vertrag mit data.finance.admin.ch festgestellt, und ein Issue, das auf so
               // einen Lauf hin zugeht, behauptet einen Vergleich, den es nicht
               // gab. Sichtbar wird es ueber den roten Job.
+              //
+              // Hier landet seit dem 17.8.2026 auch der Ausfall der Quelle: Sind
+              // ALLE Fehlschlaege Transportfehler, war die Quelle nicht erreichbar
+              // — das ist kein Befund und macht keinen Thread auf.
               core.warning(`Live-Suite nicht ausgewertet: ${reason}. Am Issue wurde nichts geaendert.`);
               return;
             }
@@ -119,11 +123,12 @@ jobs:
                 `Lauf: ${run}`,
                 `Einordnung: ${reason}`,
                 '',
-                '**Rot heisst hier nicht zwingend «unser Fehler».** Es heisst: Der Vertrag',
-                'mit der Quelle hat sich geaendert, oder die Quelle ist gerade aus. Beides',
-                'gehoert gesehen, nur das Erste gehoert gefixt — und genau das Erste sehen',
-                'die Unit-Tests nicht, weil ihre Fixtures aus derselben Annahme geschrieben',
-                'sind wie der Code.',
+                '**Mindestens ein Fehlschlag ist inhaltlich.** Ein reiner Ausfall der',
+                'Quelle wäre `unknown` und hätte dieses Issue nicht geöffnet — hier hat',
+                'also etwas über den Vertrag mit der Quelle gesprochen.',
+                '',
+                'Das sehen die Unit-Tests nicht: Ihre Fixtures sind aus derselben Annahme',
+                'geschrieben wie der Code und können sie deshalb nicht widerlegen.',
                 '',
                 'Erst die Quelle abfragen, dann einordnen — nicht aus der Fehlermeldung',
                 'schliessen.',

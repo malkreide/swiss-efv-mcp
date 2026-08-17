@@ -19,6 +19,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from xml.sax.saxutils import quoteattr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -36,6 +37,52 @@ def suite(tests: int, failures: int = 0, errors: int = 0, skipped: int = 0) -> s
         '<?xml version="1.0" encoding="utf-8"?>\n'
         f'<testsuites><testsuite name="pytest" tests="{tests}" failures="{failures}" '
         f'errors="{errors}" skipped="{skipped}"></testsuite></testsuites>'
+    )
+
+
+# Wortlaut aus echten pytest-Laeufen, am 17.8.2026 nachgemessen (pytest 8):
+# der voll qualifizierte Typ steht vorne, bei Fixtures in `failed on setup with`
+# verpackt. Handgeschrieben waere hier nur die eigene Annahme kodiert.
+TRANSPORT_MSG = (
+    "swiss_efv_mcp.client.UpstreamError: Upstream unreachable after 1 attempt(s), "
+    "25s budget spent: TimeoutError: no further detail (host=www.data.finance.admin.ch)"
+)
+NICHT_ATTEMPTED_MSG = (
+    "swiss_efv_mcp.client.UpstreamNotAttemptedError: Upstream not attempted: "
+    "25s budget already spent (host=www.data.finance.admin.ch)"
+)
+FIXTURE_TRANSPORT_MSG = f'failed on setup with "{TRANSPORT_MSG}"'
+# Im XML steht der Umbruch als `&#10;`; nach dem Parsen ist es ein Newline, und
+# genau das sieht die Einordnung.
+VERTRAGSBRUCH_MSG = (
+    "AssertionError: Spalte Saldo fehlt im Dump\nassert 'Saldo' in {'Kopfzeile_neu': '1'}"
+)
+# Die Falle: ein ECHTER Fehlschlag, der den Transporttyp nur beim Namen nennt.
+DID_NOT_RAISE_MSG = "Failed: DID NOT RAISE UpstreamError"
+
+
+def faelle(tests: int, failures: list[str] = [], errors: list[str] = []) -> str:  # noqa: B006
+    """XML mit einzeln ausgewiesenen `<failure>`/`<error>`, wie pytest es schreibt.
+
+    `quoteattr` ist hier nicht Kosmetik. Die Fixture-Meldung enthaelt selbst
+    Anfuehrungszeichen (`failed on setup with "..."`); roh eingesetzt zerbricht
+    sie das XML, und die Einordnung antwortet `unknown` — weil der Report
+    unlesbar ist, nicht weil sie den Transportfehler erkannt haette. Der Test
+    war damit gruen, ohne irgendetwas zu pruefen: aufgefallen erst in der
+    Gegenprobe, als die Erkennung ausgebaut wurde und er gruen blieb.
+    """
+    cases = "".join(
+        f'<testcase name="test_{i}"><failure message={quoteattr(m)}></failure></testcase>'
+        for i, m in enumerate(failures)
+    ) + "".join(
+        f'<testcase name="test_e{i}"><error message={quoteattr(m)}></error></testcase>'
+        for i, m in enumerate(errors)
+    )
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        f'<testsuites><testsuite name="pytest" tests="{tests}" '
+        f'failures="{len(failures)}" errors="{len(errors)}" skipped="0">'
+        f"{cases}</testsuite></testsuites>"
     )
 
 
@@ -93,6 +140,81 @@ class ClassifyTest(unittest.TestCase):
         xml = '<testsuite tests="2" failures="0" errors="0" skipped="0"/>'
         state, _ = self._state(xml)
         self.assertEqual(state, clr.CLEAR)
+
+
+class TransportfehlerTest(unittest.TestCase):
+    """Nicht erreichbar ist kein Befund.
+
+    Am 17.8.2026 um 06:00 UTC: vier Fehlschlaege, alle `UpstreamError` nach
+    einem TLS-Handshake-Timeout, ein Issue mit dem Titel «rot» — und beim
+    direkten Abruf danach antwortete die Quelle mit 200 in 2,2s. «Der Vertrag
+    hat sich geaendert» will einen Fix, «die Quelle war zwei Minuten aus» will
+    nichts; wer beides gleich meldet, bringt sich das Melden ab.
+    """
+
+    def _state(self, xml: str) -> tuple[str, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            return clr.classify(write(Path(tmp), xml))
+
+    def test_lauf_vom_17_8_ist_kein_finding(self):
+        """4 Transport-Fehlschlaege, 2 gruen — genau die Verteilung des Laufs."""
+        state, reason = self._state(faelle(tests=6, failures=[TRANSPORT_MSG] * 4))
+        self.assertEqual(state, clr.UNKNOWN)
+        self.assertIn("Transportfehler", reason)
+
+    def test_budget_vor_dem_ersten_request_ist_auch_transport(self):
+        state, _ = self._state(faelle(tests=2, failures=[NICHT_ATTEMPTED_MSG]))
+        self.assertEqual(state, clr.UNKNOWN)
+
+    def test_gefallene_fixture_ist_transport(self):
+        """Faellt die session-weite Fixture, meldet pytest `error`, nicht `failure`."""
+        state, _ = self._state(faelle(tests=6, errors=[FIXTURE_TRANSPORT_MSG] * 6))
+        self.assertEqual(state, clr.UNKNOWN)
+
+    def test_ein_inhaltlicher_fehlschlag_schlaegt_alle_transportfehler(self):
+        """Der eine sagt etwas ueber den Vertrag. Der gehoert gesehen."""
+        state, reason = self._state(
+            faelle(tests=6, failures=[TRANSPORT_MSG, TRANSPORT_MSG, VERTRAGSBRUCH_MSG])
+        )
+        self.assertEqual(state, clr.FINDING)
+        self.assertIn("1 inhaltlich", reason)
+
+    def test_did_not_raise_ist_ein_befund_kein_transport(self):
+        """Erwaehnt den Typnamen — eine Suche im Text wuerde den Befund fressen."""
+        state, _ = self._state(faelle(tests=3, failures=[DID_NOT_RAISE_MSG]))
+        self.assertEqual(state, clr.FINDING)
+
+    def test_kurzer_typname_zaehlt_nicht(self):
+        """Ohne Modulpfad ist es irgendein Text, kein Urteil von `EFVClient`."""
+        state, _ = self._state(faelle(tests=3, failures=["UpstreamError: irgendwas"]))
+        self.assertEqual(state, clr.FINDING)
+
+    def test_transporttyp_muss_vorne_stehen(self):
+        state, _ = self._state(
+            faelle(
+                tests=3, failures=["AssertionError: erwartet swiss_efv_mcp.client.UpstreamError: x"]
+            )
+        )
+        self.assertEqual(state, clr.FINDING)
+
+    def test_fehlschlag_ohne_message_ist_kein_transport(self):
+        """Unlesbar heisst Befund, nicht Entwarnung."""
+        xml = (
+            '<testsuite tests="2" failures="1" errors="0" skipped="0">'
+            '<testcase name="test_x"><failure></failure></testcase></testsuite>'
+        )
+        state, _ = self._state(xml)
+        self.assertEqual(state, clr.FINDING)
+
+    def test_mehr_gezaehlte_als_ausgewiesene_fehler_bleibt_finding(self):
+        """Ueber die ungesehenen ist nichts bekannt — Unbekanntes unterdrueckt nichts."""
+        xml = (
+            '<testsuite tests="6" failures="4" errors="0" skipped="0">'
+            f'<testcase name="test_x"><failure message="{TRANSPORT_MSG}"></failure></testcase>'
+            "</testsuite>"
+        )
+        state, _ = self._state(xml)
+        self.assertEqual(state, clr.FINDING)
 
 
 class MissingReportTest(unittest.TestCase):
