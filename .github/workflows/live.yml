@@ -78,7 +78,7 @@ jobs:
       # Einordnung `clear` war, also steht die Antwort in der Lauf-Historie.
       - name: Lauf-Historie holen
         id: historie
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const runs = await github.rest.actions.listWorkflowRuns({
@@ -96,7 +96,7 @@ jobs:
             --run-id "${{ github.run_id }}"
 
       - name: Issue oeffnen, aktualisieren oder schliessen
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         # Ueber `env`, nicht ueber `${{ }}` im Skript: Die pytest-Ausgabe ist
         # fremder Text, der sonst in einem JavaScript-Template-Literal landet.
         # Ein Backtick oder ein `${` darin bricht das Skript oder fuehrt aus,
