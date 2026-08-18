@@ -133,3 +133,67 @@ def test_der_erkenner_kennt_die_gaengigen_installationsformen() -> None:
     assert not uebersehen, f"Erkenner uebersieht: {uebersehen}"
     fehlalarm = [z for z in darf_nicht_treffen if _installiert_ruff(z)]
     assert not fehlalarm, f"Erkenner schlaegt faelschlich an: {fehlalarm}"
+
+
+# --- Actions: eine Major-Version je Action ---------------------------------
+#
+# Dieselbe Krankheit, anderer Ort. `github-script` steht in `live.yml` an zwei
+# Schritten, und beide muessen dieselbe Major fahren: Laeuft der eine auf einer
+# aelteren, ist nicht der Aufbau rot, sondern nur ein Schritt anders — genau die
+# stille Sorte Abweichung, wegen der der ruff-Pin oben ueberhaupt existiert.
+#
+# `github-script@v9` ist ausserdem kein beliebiger Bump: Ab v9 ist
+# `@actions/github` ESM-only, `require('@actions/github')` faellt zur Laufzeit
+# um, und ein Skript, das `getOctokit` als eigene Variable deklariert, ebenso.
+# Der `script:`-Koerper selbst bleibt CommonJS — `require` auf eine eigene Datei
+# (`scripts/live_issue.cjs`) ist weiterhin der dokumentierte Weg. Der Test haelt
+# fest, dass hier keines der beiden gebrochenen Muster einzieht.
+
+_ACTION = re.compile(r"^\s*(?:-\s+)?uses:\s*([\w.-]+/[\w.-]+)@(\S+)", re.MULTILINE)
+
+# Muster, die ab github-script v9 zur Laufzeit umfallen.
+_ESM_BRUCH = re.compile(r"""require\(\s*["']@actions/github["']\s*\)""")
+_GETOCTOKIT_DEKLARATION = re.compile(r"\b(?:const|let|var)\s+getOctokit\b")
+
+
+def _aktionen() -> dict[str, set[str]]:
+    """{Action-Name: {benutzte Versionen}} ueber alle Workflows."""
+    gefunden: dict[str, set[str]] = {}
+    for datei in _workflow_dateien():
+        for name, version in _ACTION.findall(datei.read_text(encoding="utf-8")):
+            gefunden.setdefault(name, set()).add(version)
+    return gefunden
+
+
+def test_jede_action_faehrt_ueberall_dieselbe_version() -> None:
+    uneinig = {n: sorted(v) for n, v in _aktionen().items() if len(v) > 1}
+    assert not uneinig, (
+        f"Action-Versionen laufen auseinander: {uneinig}. Zwei Schritte mit "
+        "verschiedenen Majors machen kein Gate rot — sie verhalten sich nur "
+        "unterschiedlich, und zwar unbemerkt."
+    )
+
+
+def test_github_script_ist_mindestens_v9() -> None:
+    """v7 zielt auf Node 20; der Runner zwingt es auf 24 und warnt darueber."""
+    versionen = _aktionen().get("actions/github-script")
+    if not versionen:  # die Action wurde entfernt — dann ist nichts zu halten
+        return
+    for version in versionen:
+        major = re.match(r"v(\d+)", version)
+        assert major, f"github-script ist nicht auf eine Major gepinnt: {version!r}"
+        assert int(major.group(1)) >= 9, (
+            f"github-script@{version} ist aelter als v9 — Node 20 ist abgekuendigt"
+        )
+
+
+def test_kein_skript_nutzt_die_in_v9_gebrochenen_muster() -> None:
+    for datei in [*_workflow_dateien(), *(_ROOT / "scripts").glob("*.cjs")]:
+        text = datei.read_text(encoding="utf-8")
+        assert not _ESM_BRUCH.search(text), (
+            f"{datei.name}: `require('@actions/github')` faellt ab v9 zur Laufzeit um"
+        )
+        assert not _GETOCTOKIT_DEKLARATION.search(text), (
+            f"{datei.name}: `getOctokit` ist ab v9 ein Funktionsparameter und "
+            "darf nicht neu deklariert werden"
+        )
