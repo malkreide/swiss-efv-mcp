@@ -29,18 +29,64 @@ from swiss_efv_mcp.server import (
 
 pytestmark = [pytest.mark.live, pytest.mark.asyncio(loop_scope="session")]
 
-# The production defaults now carry the tight bound themselves — a 25s total
-# budget over the whole call (ARCH-014), so the suite no longer needs to
-# undercut the per-request timeout. Only the backoff is still shortened: the
-# suite is a monitor, and a dead source should show up in seconds rather than
-# in the production ladder's 2/4/8. The dumps are 0.5-5 MB and answer in
-# seconds when the source is alive.
+# --- The client the suite runs on -------------------------------------------
+#
+# The production budget (ARCH-014) is anchored to what an MCP caller will still
+# wait for: 25s over the whole call, per-request timeout 25s too. Those two
+# being equal is what makes a hanging connect fatal on the first try — the
+# per-request timeout and the budget deadline fall on the same instant, the
+# budget wins, and `_fetch_with_retry` breaks out instead of retrying. Measured
+# on 2026-08-18: `Upstream unreachable after 1 attempt(s), 25s budget spent`,
+# four tests down, and the source answering 200 in 2.6s right after. Three of
+# the four attempts this suite pays a backoff for never went out.
+#
+# For a nightly monitor the anchor is the wrong one. Nobody is waiting on a
+# cron job, so the budget should not be sized by an MCP caller's patience. It
+# is sized here so that ALL `_ATTEMPTS` attempts fit, including the backoff
+# ladder at its widest jitter:
+#
+#     4 x 15s attempts + (1.5 + 3 + 6)s backoff = 70.5s   ->  75s budget
+#
+# The per-attempt timeout drops from 25s to 15s, and that is safe only because
+# the retries now exist: before, a single slow answer was fatal. 15s is still
+# more than twice the slowest dump measured against the live source (5 MB in
+# 6.5s).
+#
+# THE COST, STATED
+# ----------------
+# A failed fetch is not cached, so every test that needs a dead dataset runs
+# the full ladder again — that is the 2026-08-01 incident in the docstring
+# above (four tests, 17 minutes). This budget re-opens a bounded share of it:
+# six tests at 75s is 7.5 minutes worst case, against the job's
+# `timeout-minutes: 15`. `test_live_budget_fits_the_job_timeout` holds that
+# pair together.
+#
+# The bound only bites on a TOTAL outage — and a total outage is what
+# `live_streak.py` is there to name. A brief hiccup, the case this is for,
+# costs only the attempts it actually takes: a source back on the second try
+# costs ~16s, not 75.
 _LIVE_BACKOFF = 1.0  # 1s, 2s, 4s between the four attempts
+_LIVE_TIMEOUT = 15.0  # per attempt; production uses 25s
+_LIVE_TOTAL_BUDGET = 75.0  # whole call; production uses 25s
+
+
+def live_client() -> EFVClient:
+    """The client this suite runs on.
+
+    A function rather than three constants read from elsewhere: a test that
+    asserts against the real object cannot pass while the fixture quietly uses
+    different numbers.
+    """
+    return EFVClient(
+        backoff_base=_LIVE_BACKOFF,
+        timeout=_LIVE_TIMEOUT,
+        total_budget=_LIVE_TOTAL_BUDGET,
+    )
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def client():
-    c = EFVClient(backoff_base=_LIVE_BACKOFF)
+    c = live_client()
     try:
         yield c
     finally:
