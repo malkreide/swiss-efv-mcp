@@ -36,9 +36,12 @@ schuetzt danach gar nichts. Umgesetzt ist das so:
 - **Still bei**: fehlendem git, keinem Repo, keinem `origin`, leerem HEAD
   (frischer Klon ohne Commit), fehlgeschlagenem `ls-remote` oder `fetch`,
   unlesbarem Zaehlergebnis — und bei Abstand 0.
-- **Detached HEAD** ist kein Sonderfall im Sinne von «abbrechen»: Der
-  Abstand ist auch dort korrekt zaehlbar und wird gemeldet, nur eben als
-  `detached HEAD (<sha>)` statt als Branch-Name. Nichts bricht ab.
+- **Detached HEAD**: still. Wer dort steht, hat einen Stand bewusst
+  angesteuert (bisect, Tag, alter Commit); ein Abstand zum Default-Branch
+  ist dann keine Aussage ueber veraltete Arbeit, sondern Rauschen -- und
+  Rauschen entwertet genau die eine Meldung, auf die es ankommt. Die
+  Pruefung steht **vor** dem fetch: kein Netz fuer einen Fall, in dem
+  ohnehin geschwiegen wird.
 
 ## Der Default-Branch wird ermittelt, nicht angenommen
 

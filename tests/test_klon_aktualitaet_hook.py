@@ -110,6 +110,34 @@ def _hook(
     )
 
 
+@pytest.fixture
+def schlafendes_git(tmp_path: pathlib.Path) -> pathlib.Path:
+    """Ein `git` im PATH, das bei `ls-remote` und `fetch` einfach liegen bleibt.
+
+    Damit wird das haengende Netz erzeugt, statt es zu erhoffen: eine echte,
+    flatternde Verbindung laesst sich in einem Test nicht bestellen, und ein
+    nicht routbares Ziel haengt je nach Netzpolitik verschieden lange. Alle
+    uebrigen git-Aufrufe laufen unveraendert durch.
+    """
+    echtes_git = shutil.which("git")
+    assert echtes_git is not None
+    verzeichnis = tmp_path / "bin"
+    verzeichnis.mkdir()
+    platzhalter = verzeichnis / "git"
+    platzhalter.write_text(
+        "#!/usr/bin/env bash\n"
+        'for argument in "$@"; do\n'
+        '  case "$argument" in\n'
+        "    ls-remote | fetch) sleep 60; exit 0 ;;\n"
+        "  esac\n"
+        "done\n"
+        f'exec {echtes_git} "$@"\n',
+        encoding="utf-8",
+    )
+    platzhalter.chmod(0o755)
+    return verzeichnis
+
+
 # --- Registrierung ----------------------------------------------------------
 
 
@@ -205,8 +233,14 @@ def test_default_branch_master_wird_ermittelt(tmp_path: pathlib.Path) -> None:
     assert "1" in ergebnis.stdout
 
 
-def test_detached_head_meldet_statt_abzubrechen(tmp_path: pathlib.Path) -> None:
-    """Ohne Branch-Namen bleibt der Abstand zaehlbar."""
+def test_detached_head_schweigt(tmp_path: pathlib.Path) -> None:
+    """Kein Branch, der hinterherhinken koennte -- also keine Meldung.
+
+    Wer detached steht, hat einen Stand bewusst angesteuert (bisect, Tag,
+    alter Commit). Der Abstand zum Default-Branch ist dort keine Aussage
+    ueber veraltete Arbeit, sondern Rauschen -- und Rauschen ist genau das,
+    was die eine Meldung entwertet, auf die es ankommt.
+    """
     upstream = _upstream(tmp_path, "main")
     klon = _klon(tmp_path, upstream)
     _commit(upstream, "zwei")
@@ -215,8 +249,31 @@ def test_detached_head_meldet_statt_abzubrechen(tmp_path: pathlib.Path) -> None:
     ergebnis = _hook(klon)
 
     assert ergebnis.returncode == 0
-    assert "detached HEAD" in ergebnis.stdout
-    assert "origin/main" in ergebnis.stdout
+    assert ergebnis.stdout.strip() == ""
+
+
+def test_detached_head_fasst_das_netz_nicht_an(
+    tmp_path: pathlib.Path, schlafendes_git: pathlib.Path
+) -> None:
+    """Die Pruefung steht vor dem fetch, nicht dahinter.
+
+    Beides schwiege am Ende; nur die eine Reihenfolge zahlt dafuer nichts.
+    Erkennbar wird der Unterschied an der Zeit: Steht die Pruefung hinter dem
+    Netz, laeuft der Hook hier in zwei Zeitgrenzen zu je 5 s, statt sofort
+    zurueckzukommen.
+    """
+    upstream = _upstream(tmp_path, "main")
+    klon = _klon(tmp_path, upstream)
+    _commit(upstream, "zwei")
+    _git("checkout", "--detach", "HEAD", cwd=klon)
+
+    beginn = time.monotonic()
+    ergebnis = _hook(klon, pfad_praefix=schlafendes_git)
+    gedauert = time.monotonic() - beginn
+
+    assert ergebnis.returncode == 0
+    assert ergebnis.stdout.strip() == ""
+    assert gedauert < 3, gedauert
 
 
 # --- Niemals blockieren -----------------------------------------------------
@@ -270,11 +327,11 @@ def test_repository_ohne_commit_geht_still_durch(tmp_path: pathlib.Path) -> None
     assert ergebnis.stdout.strip() == ""
 
 
-def test_haengendes_netz_laeuft_in_die_zeitgrenze(tmp_path: pathlib.Path) -> None:
+def test_haengendes_netz_laeuft_in_die_zeitgrenze(
+    tmp_path: pathlib.Path, schlafendes_git: pathlib.Path
+) -> None:
     """Ein Remote, das nicht antwortet, haelt den Sessionstart nicht an.
 
-    Statt eine echte, flatternde Verbindung zu erhoffen, wird `git` fuer
-    `ls-remote` und `fetch` durch einen Platzhalter ersetzt, der schlaeft.
     Das ist der Fall, der den Hook sonst abschalten liesse: Wer zweimal 40
     Sekunden auf den Sessionstart wartet, entfernt ihn.
     """
@@ -282,25 +339,8 @@ def test_haengendes_netz_laeuft_in_die_zeitgrenze(tmp_path: pathlib.Path) -> Non
     klon = _klon(tmp_path, upstream)
     _commit(upstream, "zwei")
 
-    echtes_git = shutil.which("git")
-    assert echtes_git is not None
-    bin_verzeichnis = tmp_path / "bin"
-    bin_verzeichnis.mkdir()
-    platzhalter = bin_verzeichnis / "git"
-    platzhalter.write_text(
-        "#!/usr/bin/env bash\n"
-        'for argument in "$@"; do\n'
-        '  case "$argument" in\n'
-        "    ls-remote | fetch) sleep 60; exit 0 ;;\n"
-        "  esac\n"
-        "done\n"
-        f'exec {echtes_git} "$@"\n',
-        encoding="utf-8",
-    )
-    platzhalter.chmod(0o755)
-
     beginn = time.monotonic()
-    ergebnis = _hook(klon, pfad_praefix=bin_verzeichnis, timeout_sekunden="2")
+    ergebnis = _hook(klon, pfad_praefix=schlafendes_git, timeout_sekunden="2")
     gedauert = time.monotonic() - beginn
 
     assert ergebnis.returncode == 0
