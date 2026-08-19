@@ -20,6 +20,13 @@ den Remote-HEAD und endet mit 0.
 Ein veralteter Klon erzeugt eine rote CI, deren Ursache nicht im Diff steht.
 Am 3.8.2026 zweimal passiert — beide Male fehlten genau die Commits, die
 das Gate einführten, an dem der Branch scheiterte.
+
+Seit diesem Vorfall läuft die Prüfung als SessionStart-Hook
+(`.claude/hooks/klon-aktualitaet.sh`, Begründung in `.claude/hooks/README.md`):
+Er meldet den Abstand beim Sessionstart und schweigt bei 0. Er blockiert nie —
+kein Netz, kein Remote, detached HEAD gehen still durch. Er ersetzt das Rezept
+oben also nicht, er erinnert nur daran.
+
 Gates lokal fahren, mit der GEPINNTEN ruff-Version aus der CI. Eine andere
 Version meldet Abweichungen, die niemand verursacht hat.
 
