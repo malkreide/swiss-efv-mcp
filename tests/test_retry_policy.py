@@ -437,3 +437,87 @@ async def test_a_spent_budget_before_the_first_request_has_its_own_type(fake_clo
         await c.load("headline")
     assert isinstance(exc_info.value, UpstreamError)
     assert "budget already spent" in str(exc_info.value)
+
+
+# --- The scheduled live suite gets its own budget ---------------------------
+#
+# Production and monitor answer to different callers. The tests below hold the
+# distinction: that the monitor really gets its ladder, that production really
+# does not, and that the monitor's worst case still fits the job it runs in.
+
+
+def _haengende_quelle(fake_clock):
+    """A source that never answers, modelled in the fake clock's time.
+
+    The attempt consumes exactly the time it was granted — `request.extensions`
+    carries the per-attempt timeout the retry loop computed, i.e.
+    ``min(timeout, remaining)`` — and only then fails. Without advancing the
+    clock, `respx` would raise instantly and every budget would look wide
+    enough: the very property under test would be invisible.
+    """
+
+    def _seite(request):
+        gewaehrt = request.extensions["timeout"]["read"]
+        fake_clock["advance"](gewaehrt)
+        raise httpx.ConnectTimeout("", request=request)
+
+    return _seite
+
+
+@respx.mock
+async def test_die_live_suite_bekommt_ihre_vier_versuche(fake_clock):
+    """A hanging connect must not eat the monitor's whole ladder in one attempt."""
+    from tests.test_live import live_client
+
+    route = respx.get(URL).mock(side_effect=_haengende_quelle(fake_clock))
+    with pytest.raises(UpstreamError) as exc_info:
+        await live_client().load("headline")
+    assert route.call_count == _ATTEMPTS, (
+        f"the live budget left room for {route.call_count} of {_ATTEMPTS} attempts"
+    )
+    assert "all 4 attempts used" in str(exc_info.value)
+
+
+@respx.mock
+async def test_die_produktionsvorgabe_kaeme_hier_auf_einen_versuch(fake_clock):
+    """The counter-direction, and the reason the suite needed its own budget.
+
+    Not a defect in production: a retry that finishes after the MCP caller gave
+    up buys nothing. It is the wrong bound for a cron job, and this test is
+    what keeps the monitor from silently inheriting it again.
+    """
+    route = respx.get(URL).mock(side_effect=_haengende_quelle(fake_clock))
+    with pytest.raises(UpstreamError) as exc_info:
+        await EFVClient(backoff_base=1.0).load("headline")
+    assert route.call_count == 1
+    assert "budget spent" in str(exc_info.value)
+
+
+def test_live_budget_fits_the_job_timeout():
+    """The two numbers that must agree, in two files that never read each other.
+
+    A failed fetch is not cached, so every live test that needs a dead dataset
+    pays the full budget again. Raising the budget therefore spends the job's
+    `timeout-minutes`, and a job killed by that timeout writes no JUnit XML at
+    all — the run would go from a classified `unknown` to no evidence.
+    """
+    import pathlib
+    import re
+
+    from tests.test_live import _LIVE_TOTAL_BUDGET
+
+    wurzel = pathlib.Path(__file__).resolve().parents[1]
+    live_yml = (wurzel / ".github" / "workflows" / "live.yml").read_text(encoding="utf-8")
+    treffer = re.search(r"^\s*timeout-minutes:\s*(\d+)", live_yml, re.MULTILINE)
+    assert treffer, "live.yml carries no job timeout — nothing bounds the worst case"
+    job_sekunden = int(treffer.group(1)) * 60
+
+    live_py = (wurzel / "tests" / "test_live.py").read_text(encoding="utf-8")
+    anzahl_tests = len(re.findall(r"^async def test_", live_py, re.MULTILINE))
+    assert anzahl_tests > 0, "no live tests found — the worst case would read as zero"
+
+    schlimmstenfalls = _LIVE_TOTAL_BUDGET * anzahl_tests
+    assert schlimmstenfalls * 2 <= job_sekunden, (
+        f"{anzahl_tests} tests at {_LIVE_TOTAL_BUDGET:g}s is {schlimmstenfalls:g}s — "
+        f"too close to the job's {job_sekunden}s. Halve the budget or raise the job timeout."
+    )
