@@ -97,6 +97,13 @@ command -v git >/dev/null 2>&1 || still_raus
 # Frisch geklonter, noch leerer Branch: es gibt kein HEAD zum Vergleichen.
 git rev-parse --verify --quiet HEAD >/dev/null 2>&1 || still_raus
 
+# Detached HEAD: kein Branch, der hinterherhinken koennte. Wer dort steht, hat
+# einen Stand bewusst angesteuert (bisect, Tag, alter Commit); ein Abstand zum
+# Default-Branch ist dann keine Aussage ueber veraltete Arbeit, sondern Rauschen.
+# Die Pruefung steht VOR dem fetch: kein Netz fuer einen Fall, in dem ohnehin
+# geschwiegen wird.
+git symbolic-ref --quiet HEAD >/dev/null 2>&1 || still_raus
+
 # Kein Remote `origin` — etwa ein rein lokales Repo. Nichts zu pruefen.
 git remote get-url origin >/dev/null 2>&1 || still_raus
 
@@ -128,7 +135,6 @@ ziel="$(git rev-parse --verify --quiet FETCH_HEAD 2>/dev/null)"
 [ -n "$ziel" ] || still_raus
 
 # --- Abstand zaehlen --------------------------------------------------------
-# Funktioniert auch bei detached HEAD; gemeldet wird der Stand, nicht der Name.
 fehlend="$(git rev-list --count HEAD.."$ziel" 2>/dev/null)"
 case "$fehlend" in
     '' | *[!0-9]*) still_raus ;;   # unlesbar -> still raus
@@ -136,7 +142,6 @@ case "$fehlend" in
 esac
 
 hier="$(git symbolic-ref --short --quiet HEAD 2>/dev/null)"
-[ -n "$hier" ] || hier="detached HEAD ($(git rev-parse --short HEAD 2>/dev/null))"
 
 commit_wort="Commits"
 [ "$fehlend" = "1" ] && commit_wort="Commit"
