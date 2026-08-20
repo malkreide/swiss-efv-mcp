@@ -94,3 +94,22 @@ cron `27 5 * * *` plus `workflow_dispatch`, mit Einordnung über
 erfüllt; die PR-CI schliesst Live-Tests weiterhin per `-m "not live"` aus,
 und das bleibt so. `schedule` greift nur auf dem Default-Branch — Änderungen
 an `live.yml` erst nach dem Merge wirksam, vorher von Hand auslösen.
+
+**Die Live-Suite hat ihr eigenes Budget** — 15 s je Versuch, 75 s für den
+ganzen Aufruf (`live_client()` in `tests/test_live.py`). Die Produktion fährt
+25/25, und dass beide Zahlen dort gleich sind, ist der Grund: Fällt die
+httpx-Zeitgrenze des ersten Versuchs mit der Budgetfrist zusammen, gewinnt
+das Budget und `_fetch_with_retry` bricht ab, statt zu wiederholen. Am
+18.8.2026 kostete das vier Tests — `Upstream unreachable after 1 attempt(s),
+25s budget spent`, während die Quelle direkt danach mit 200 in 2,6 s
+antwortete. Für die Produktion ist der enge Etat richtig (ein Retry nach dem
+Aufgeben des MCP-Aufrufers bringt nichts); auf einen Cron-Job wartet niemand.
+Die 75 s sind gerechnet: vier Versuche samt Backoff-Leiter bei weitester
+Streuung, `4×15 + (1,5+3+6) = 70,5 s`.
+
+Wer daran dreht, muss `timeout-minutes` in `live.yml` mit ansehen. Ein
+fehlgeschlagener Fetch wird nicht gecacht, also fährt **jeder** Test die
+Leiter erneut — am 1.8.2026 waren das vier Tests und 17 Minuten. Budget mal
+Anzahl Live-Tests muss deshalb deutlich unter dem Job-Timeout bleiben;
+`test_live_budget_fits_the_job_timeout` hält die beiden Zahlen zusammen und
+liest sie dort, wo sie stehen.
