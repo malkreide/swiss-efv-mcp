@@ -44,6 +44,19 @@ from tests.conftest import FIXTURES
 
 URL = DATASETS["headline"].url
 
+# Wall-clock numbers for the deadline test below, spread far enough apart that
+# scheduler jitter cannot move the outcome. Measured on 3.11 over 15 runs of
+# that test's own body: it returned in 0.100-0.117s against a 0.05s budget, so
+# roughly 0.055s of the elapsed time is client setup plus the one attempt, not
+# the budget. The old bound of 0.5s left about 0.4s of absolute headroom - and
+# CI jitter is absolute, not proportional: a loaded runner turned 0.105s into
+# 0.55s and the assertion fell. Raising the budget does not shrink the jitter,
+# it makes the jitter small *relative to* what is measured, so a deadline that
+# fails to cut now misses by seconds rather than by milliseconds.
+_BUDGET = 0.5
+_CUT_BY = 2.5
+_SLOW_RESPONSE = 8.0
+
 
 def _resp(status: int, retry_after: str | None = None) -> httpx.Response:
     headers = {"Retry-After": retry_after} if retry_after is not None else {}
@@ -378,21 +391,39 @@ async def test_a_slow_response_is_cut_by_the_wall_clock_deadline():
     Deliberately without `fake_clock`: this guarantee is about real time, and a
     clock that only moves when something sleeps cannot refute it. That blind
     spot is why the counter-checks missed this.
+
+    The margins are wide on purpose — see `_BUDGET` above for the measurement
+    that set them. A warm-up call pays the client's setup cost before the clock
+    starts, so the measured window holds the deadline and nothing else.
     """
     import asyncio as real_asyncio
     import time as real_time
 
+    # Warm-up on a full budget: builds the client, opens the transport and pays
+    # whatever else the first call through respx costs, all outside the window
+    # measured below.
+    route = respx.get(URL).mock(return_value=httpx.Response(200, text=FIXTURES["headline"]))
+    warm = EFVClient()
+    await warm.load("headline")
+    await warm.aclose()
+
     async def _slow(request):
-        await real_asyncio.sleep(1.0)
+        await real_asyncio.sleep(_SLOW_RESPONSE)
         return httpx.Response(200, text=FIXTURES["headline"])
 
-    respx.get(URL).mock(side_effect=_slow)
-    c = EFVClient(total_budget=0.05)
+    route.mock(side_effect=_slow)
+    c = EFVClient(total_budget=_BUDGET)
     started = real_time.monotonic()
     with pytest.raises(RuntimeError):
         await c.load("headline")
     elapsed = real_time.monotonic() - started
-    assert elapsed < 0.5, f"deadline did not cut: {elapsed:.2f}s"
+
+    # Two-sided on purpose. The upper bound is the guarantee: a response that
+    # would have taken _SLOW_RESPONSE was cut. The lower bound says the cut came
+    # from the budget rather than from something failing straight away — a
+    # deadline computed wrong sails through an upper bound alone.
+    assert elapsed >= _BUDGET / 2, f"cut too early to be the budget: {elapsed:.3f}s"
+    assert elapsed < _CUT_BY, f"deadline did not cut: {elapsed:.2f}s"
     await c.aclose()
 
 
