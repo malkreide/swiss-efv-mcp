@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Behoben
+
+- **`allow_headers` stand auf `["*"]`.** Starlette schaltet damit auf
+  `allow_all_headers` und spiegelt im Preflight zurück, was der Browser
+  ankündigt — jeder gelistete Origin durfte jeden beliebigen Header senden. Die
+  Liste nennt jetzt `Content-Type`, `Mcp-Session-Id` und `Last-Event-ID`.
+  Letzterer setzt einen abgerissenen SSE-Strom fort und war unter der Wildcard
+  nie geprüft: eine Wildcard kann nicht falsch werden und sagt deshalb nichts
+  darüber, ob die Header, die das Protokoll braucht, freigegeben sind.
+
+  Die Routing-Header der Spec `2026-07-28` stehen bewusst **nicht** darauf.
+  fastmcp 3.x pinnt `mcp` 1.x, wo es `mcp.shared.inbound` nicht gibt und
+  niemand sie liest. `test_die_routing_header_gehoeren_hierher_sobald_das_sdk_sie_liest`
+  ist an das SDK gebunden statt an eine Notiz und fällt, sobald ein Upgrade das
+  Modul hereinzieht.
+
+### Geändert
+
+- **`build_http_app` aus `main` herausgezogen.** Solange der App-Aufbau neben
+  `uvicorn.run` stand, liess sich die CORS-Freigabeliste nur lesen, nicht
+  ausprobieren — und eine Liste, die richtig aussieht, kann trotzdem nie an der
+  Middleware ankommen. `main` ruft die Funktion auf; am Verhalten ändert sich
+  nichts.
+
 ### Added
 
 - **Die Pruefsummen im Fixture-Nachweis waren Zierde.** `PROVENANCE.md` fuehrt
