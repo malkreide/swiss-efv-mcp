@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Behoben
+
+- **`DELETE` fehlte in `allow_methods`.** Der Preflight wies die Methode mit 400
+  ab, ein Browser-Client konnte also Sessions öffnen, aber nie schliessen. Das
+  SDK bedient sie sehr wohl — `_handle_delete_request` in
+  `mcp.server.streamable_http`, und dessen eigene 405-Antwort wirbt mit
+  `Allow: GET, POST, DELETE`. Die Freigabeliste war schmaler als der Server.
+
+  Gemessen vor der Behebung: `Preflight DELETE -> 400` auf beiden Transporten,
+  bei `Access-Control-Allow-Methods: GET, POST, OPTIONS`. Danach `200` und
+  `GET, POST, DELETE, OPTIONS`.
+
 ### Hinzugefügt
 
 - **`tests/test_protocol_version.py` schliesst drei Lücken am Protokoll-Pin.**

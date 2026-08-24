@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 from starlette.testclient import TestClient
 
-from swiss_efv_mcp.__main__ import CORS_ALLOW_HEADERS, build_http_app
+from swiss_efv_mcp.__main__ import CORS_ALLOW_HEADERS, CORS_ALLOW_METHODS, build_http_app
 from swiss_efv_mcp.settings import Settings
 
 ORIGIN = "https://client.example"
@@ -135,6 +135,40 @@ def test_die_routing_header_gehoeren_hierher_sobald_das_sdk_sie_liest() -> None:
         f"Das SDK liest jetzt Routing-Header, die Freigabeliste nennt sie nicht: "
         f"{sorted(noetig - erlaubt)}"
     )
+
+
+@pytest.mark.parametrize("methode", ["GET", "POST", "DELETE"])
+def test_jede_freigegebene_methode_passiert_den_preflight(
+    client: TestClient, transport: str, methode: str
+) -> None:
+    """`DELETE` fehlte, und der Preflight wies es mit 400 ab.
+
+    Ein Browser-Client konnte damit Sessions öffnen, aber nie schliessen. Das
+    SDK bedient die Methode sehr wohl — `_handle_delete_request` in
+    `mcp.server.streamable_http`, und dessen eigene 405-Antwort wirbt mit
+    `Allow: GET, POST, DELETE`. Die Freigabeliste war schmaler als der Server.
+
+    Einzeln parametrisiert, damit im Fehlerfall die Methode im Testnamen steht
+    und nicht erst aus einer Sammelmeldung herausgelesen werden muss.
+    """
+    resp = preflight(client, transport, "content-type", method=methode)
+    assert resp.status_code == 200, f"Preflight für {methode} abgewiesen"
+    assert methode.lower() in resp.headers["access-control-allow-methods"].lower()
+
+
+def test_eine_nicht_freigegebene_methode_wird_abgewiesen(
+    client: TestClient, transport: str
+) -> None:
+    """Die Gegenkontrolle. Ohne sie wäre der Test darüber auch gegen eine
+    Methoden-Wildcard grün — was eine andere Lücke wäre, keine Behebung."""
+    resp = preflight(client, transport, "content-type", method="PATCH")
+    assert resp.status_code == 400, "die Methodenliste winkt alles durch"
+
+
+def test_die_methodenliste_nennt_die_sessionbeendigung() -> None:
+    """`DELETE` ist der Grund für diese Liste; die Zusicherung hält ihn fest,
+    auch wenn jemand die Liste später umbaut."""
+    assert "DELETE" in CORS_ALLOW_METHODS
 
 
 def test_ein_fremder_origin_wird_weiterhin_abgewiesen(client: TestClient, transport: str) -> None:
