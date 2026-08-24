@@ -44,6 +44,17 @@ CORS_ALLOW_HEADERS = [
     "Last-Event-ID",
 ]
 
+# `DELETE` beendet eine Session ausdruecklich. Es fehlte hier, und der Preflight
+# wies die Methode mit 400 ab — ein Browser-Client konnte also Sessions oeffnen,
+# aber nie schliessen. Das SDK bedient sie sehr wohl: `_handle_delete_request`
+# in `mcp.server.streamable_http`, und dessen eigene 405-Antwort wirbt mit
+# `Allow: GET, POST, DELETE`. Die Freigabeliste war schmaler als der Server.
+#
+# `OPTIONS` steht mit auf der Liste, obwohl Starlette den Preflight selbst
+# beantwortet — so nennt die Liste vollstaendig, was am Endpunkt zulaessig ist,
+# statt eine Methode auszulassen, die jeder Browser als Erstes schickt.
+CORS_ALLOW_METHODS = ["GET", "POST", "DELETE", "OPTIONS"]
+
 
 def build_http_app(settings=None):
     """Build the network-transport ASGI app with CORS, without binding a socket.
@@ -63,7 +74,7 @@ def build_http_app(settings=None):
             Middleware(
                 CORSMiddleware,
                 allow_origins=settings.cors_origins,
-                allow_methods=["GET", "POST", "OPTIONS"],
+                allow_methods=CORS_ALLOW_METHODS,
                 allow_headers=CORS_ALLOW_HEADERS,
                 expose_headers=["Mcp-Session-Id"],
             )
