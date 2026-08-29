@@ -242,7 +242,12 @@ ohne dass jemand hineingesehen hat, und am 22.8. noch einmal 43.
 
   Der Schlusssatz wechselt bei jedem Lauf («Delightful!», «Keep it up!»,
   «More of your lovely PRs please.»); stabil ist nur der Satz davor.
-- **Der PR ist ein Draft** — darauf läuft Codex nicht an.
+- **Der PR ist ein Draft** — die *automatischen* Auslöser greifen dort nicht.
+  Von Hand angestossen läuft Codex sehr wohl auf einem Draft: am 29.8.2026 auf
+  `swiss-efv-mcp#64`, 16 Sekunden nach dem Anlegen, Auslöser «Manual request».
+  Das ist zugleich der Weg, einen Draft prüfen zu lassen, **bevor** man ihn auf
+  ready stellt — und damit das Gegenmittel zu den Sekunden zwischen «ready» und
+  Merge weiter unten.
 - **Das Kontingent ist weg** — dann schreibt er die Meldung oben.
 - **Für das Repo fehlt eine Environment** — dann schreibt er:
 
@@ -276,9 +281,12 @@ den dieser Abschnitt verhindern soll, nur in die andere Richtung.
 sich an der Form: Ein Review **mit** Befund ist ein Review-Objekt
 («💡 Codex Review», mit Commit-Angabe); ein Review **ohne** Befund und die
 beiden Ausfallmeldungen — Kontingent wie Environment — sind gewöhnliche
-Issue-Kommentare und trennen sich nur im Text. Beim Draft gibt es überhaupt
-nichts, weil Codex nicht anläuft; ein kommentarloser Draft ist deshalb kein
-Beleg, sondern ein nicht durchgeführter Test.
+Issue-Kommentare und trennen sich nur im Text. Beim Draft greift ohne
+manuellen Anstoss kein Auslöser, dort steht dann überhaupt nichts; ein
+kommentarloser Draft ist deshalb kein Beleg, sondern ein nicht durchgeführter
+Test. Ein von Hand angestossener Lauf hinterlässt dagegen auch auf einem Draft
+dieselben Spuren wie sonst — Statusbericht, Review-Objekt oder
+Befundlos-Meldung —, und die zählen dort genauso.
 
 Der fünfte Grund ist der gefährlichste, weil er nicht wie eine Lücke aussieht,
 sondern wie ein Beleg: Nach einem Push steht das Review-Objekt des *vorigen*
