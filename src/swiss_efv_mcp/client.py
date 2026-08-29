@@ -458,10 +458,18 @@ def to_year(value: str | None) -> int | None:
         return None
 
 
-# Live-probe finding: "forward-looking" is not one label. For the Bund, future
-# years are "Budget/financial plans" (Voranschlag/Finanzplan); "Forecasts" is
-# reserved for the aggregate state (hh=staat). Map both to is_projection so the
-# agent never has to know the taxonomy.
+# Live-probe finding: "forward-looking" is not one label, and which households
+# get one is the source's business, not ours. Map every forward-looking label to
+# is_projection so the agent never has to know the taxonomy.
+#
+# Two claims stood here until 2026-08-29 and were wrong against the file by
+# then, which is how a helpful comment turns into a false one: that the Bund's
+# future years are "Budget/financial plans", and that "Forecasts" is reserved
+# for the aggregate state. Measured on 2026-08-29, the Bund has no forward
+# years at all, and `Prognosen` — the successor of "Forecasts" — appears for
+# `staat` (31 rows), `gdn` (28) and `bund_ktn_gdn` (16). Anything this comment
+# says about WHO gets projections is an observation with a date on it; the
+# mapping below is the only part that is a rule.
 #
 # THE 2026-08-27 DRIFT
 # --------------------

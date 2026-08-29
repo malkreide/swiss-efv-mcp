@@ -10,10 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Behoben
 
 - **Die EFV stellte die `source`-Spalte auf Deutsch um — `is_projection` fiel
-  fuer jede Zeile auf `None`.** Am 27.8.2026 wurde
-  `fs_dashboard/main_extern.csv` neu veroeffentlicht (Last-Modified 07:06 UTC),
+  für jede Zeile auf `None`.** Am 27.8.2026 wurde
+  `fs_dashboard/main_extern.csv` neu veröffentlicht (Last-Modified 07:06 UTC),
   mit `Rechnung` statt `Financial statements`, `Prognosen` statt `Forecasts`
-  und `Vorhandene Daten` statt `Data available`. Sonst aenderte sich nichts:
+  und `Vorhandene Daten` statt `Data available`. Sonst änderte sich nichts:
   gleiche URL, gleiche Kopfzeile, gleiche sieben Spalten, HTTP 200.
 
   Damit kannte `_PROJECTION_SOURCES`/`_ACTUAL_SOURCES` keine einzige der 6110
@@ -23,57 +23,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   darauf, aber nur als zwei zusammenhanglose `assert False`; dass der Wortschatz
   gewechselt hatte, stand in keiner Meldung.
 
-  Beide Wortschaetze sind jetzt abgebildet. Der englische bleibt: Die
-  Aufzeichnung vom 14.8.2026 traegt ihn, und eine Quelle, die einmal die
-  Sprache wechselt, kann zurueckwechseln. Fuer die vier englischen Marken ohne
-  heute belegte deutsche Entsprechung wird **keine** Uebersetzung geraten — ein
+  Beide Wortschätze sind jetzt abgebildet. Der englische bleibt: Die
+  Aufzeichnung vom 14.8.2026 trägt ihn, und eine Quelle, die einmal die
+  Sprache wechselt, kann zurückwechseln. Für die vier englischen Marken ohne
+  heute belegte deutsche Entsprechung wird **keine** Übersetzung geraten — ein
   ausgedachter String sieht aus wie ein gemessener.
 
-- **`1990-2029` stimmte nicht mehr.** Dieselbe Neuveroeffentlichung liess die
+- **`1990-2029` stimmte nicht mehr.** Dieselbe Neuveröffentlichung liess die
   Voranschlags- und Finanzplanjahre des Bundes weg; die Datei endet bei 2025
   (6110 statt 6579 Zeilen, 414 statt 516 KB). Die Registry-Notiz und die
   Tool-Beschreibung von `fiscal_headline` nannten den alten Horizont als
-  Zusicherung und haetten eine Agentin nach Planjahren suchen lassen, die es
+  Zusicherung und hätten eine Agentin nach Planjahren suchen lassen, die es
   nicht gibt. Beide nennen jetzt kein festes Endjahr mehr — der Horizont
-  gehoert der Quelle.
+  gehört der Quelle.
 
-### Hinzugefuegt
+- **Der Kommentar über dem Wortschatz behauptete zwei Dinge, die nicht mehr
+  stimmten.** Er sagte, die Planjahre des Bundes hiessen «Budget/financial
+  plans» und «Forecasts» sei dem Gesamtstaat vorbehalten. Gemessen am
+  29.8.2026 hat der Bund gar keine Planjahre mehr, und `Prognosen` steht bei
+  `staat` (31 Zeilen), `gdn` (28) und `bund_ktn_gdn` (16). Wer den Kopf des
+  Blocks liest, bekam die falsche Auskunft vor der richtigen. Aussagen darüber,
+  **wer** Prognosen bekommt, tragen jetzt ein Datum; Regel ist allein die
+  Abbildung darunter.
 
-- **`test_live_source_vocabulary_is_fully_mapped` benennt die naechste Drift.**
-  Der Test faehrt jede verschiedene `source`-Marke des Dumps durch
-  `is_projection` und faellt mit den unbekannten im Klartext:
+### Hinzugefügt
+
+- **`test_live_source_vocabulary_is_fully_mapped` benennt die nächste Drift.**
+  Der Test fährt jede verschiedene `source`-Marke des Dumps durch
+  `is_projection` und fällt mit den unbekannten im Klartext:
   «`source` labels the client cannot classify: ['Prognosen', 'Rechnung',
   'Vorhandene Daten']». Gegen die Funktion selbst gefragt, nicht gegen eine
-  Kopie der beiden Mengen — eine Kopie stimmt sich selbst zu, waehrend die
-  Produktion unabgebildet laeuft.
+  Kopie der beiden Mengen — eine Kopie stimmt sich selbst zu, während die
+  Produktion unabgebildet läuft.
 
   Das ist die Meldung, die am 27.8. gefehlt hat. `None` von `is_projection`
-  liest sich als «diese Zeile sagt nichts» und unterschlaegt damit genau den
+  liest sich als «diese Zeile sagt nichts» und unterschlägt damit genau den
   Unterschied, auf den es ankommt: ob die Quelle geschwiegen oder ihre
   Taxonomie verschoben hat.
 
-- **`tests/test_source_vocabulary.py`** haelt beide Wortschaetze im
-  pytest-Gate fest, einzeln je Marke und einmal durch `headline_impl`. Jede
-  Marke ist nachweislich tragend: Wird sie entfernt, fallen genau die Tests,
-  die sie nennen.
+- **`tests/test_source_vocabulary.py`** hält beide Wortschätze im pytest-Gate
+  fest, einzeln je Marke und einmal durch `headline_impl`. Jede Marke ist
+  nachweislich tragend: Wird sie entfernt, fallen genau die Tests, die sie
+  nennen.
 
-### Geaendert
+### Geändert
 
-- **Die beiden roten Live-Tests pruefen jetzt die Zusage, nicht die Vokabel.**
-  `test_live_staat_has_forecasts_label` hing an `p.kind == "Forecasts"`; das
-  ist jetzt `test_live_staat_has_projection` und fragt `is_projection`, denn
-  die Zusage an den Aufrufer ist die Kennzeichnung, nicht der Rohtext der EFV.
+- **Die beiden roten Live-Tests prüfen jetzt die Zusage, nicht die Vokabel.**
+  `test_live_staat_has_forecasts_label` hing an `p.kind == "Forecasts"` und
+  fragt als `test_live_projections_survive_into_the_tool` jetzt
+  `is_projection`, denn die Zusage an den Aufrufer ist die Kennzeichnung, nicht
+  der Rohtext der EFV. Auch der Haushalt steht nicht mehr im Test: Er wird aus
+  dem Dump abgeleitet. `staat`/`fs`/`einnahmen` trug am 29.8.2026 genau **eine**
+  Prognosezeile von 75 im ganzen File — die nächste Ausgabe, die den
+  Gesamtstaat 2025 abschliesst, hätte den Test wieder rot gemacht, und zwar
+  wegen einer Änderung an dem, was die EFV veröffentlicht. Genau der Fehler,
+  wegen dem der Bund-Test umgebaut wurde.
+
   `test_live_headline_saldo_has_projection` verlangte vom Bund Planjahre bis
-  2028 — eine Aussage darueber, was die EFV veroeffentlicht, nicht darueber,
-  was dieser Server tut. Als `test_live_headline_saldo_is_classified_and_current`
-  prueft er stattdessen, dass jeder Punkt klassifiziert ist, und haelt mit
-  `Jahr - 2` eine Alterungsschwelle statt eines Horizonts: `Jahr - 1` faellt
-  jeden Januar, bevor die Rechnung des Vorjahres erscheint.
+  2028 — ebenfalls eine Aussage darüber, was die EFV veröffentlicht, nicht
+  darüber, was dieser Server tut. Als
+  `test_live_headline_saldo_is_classified_and_current` prüft er stattdessen,
+  dass jeder Punkt klassifiziert ist, und hält mit `Jahr - 2` eine
+  Alterungsschwelle statt eines Horizonts: `Jahr - 1` fiele jeden Januar,
+  bevor die Rechnung des Vorjahres erscheint.
 
 - **`timeout-minutes` in `live.yml` von 15 auf 20.** Der siebte Live-Test
   sprengt sonst `test_live_budget_fits_the_job_timeout`: 75 s mal sieben Tests
   mal Sicherheitsfaktor 2 sind 1050 s gegen 900 s. Das Gate hat genau dort
-  gegriffen, wofuer es gebaut wurde — im PR, nicht nachts.
+  gegriffen, wofür es gebaut wurde — im PR, nicht nachts.
 
 ### Behoben
 
