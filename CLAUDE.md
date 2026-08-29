@@ -281,9 +281,12 @@ den dieser Abschnitt verhindern soll, nur in die andere Richtung.
 sich an der Form: Ein Review **mit** Befund ist ein Review-Objekt
 («💡 Codex Review», mit Commit-Angabe); ein Review **ohne** Befund und die
 beiden Ausfallmeldungen — Kontingent wie Environment — sind gewöhnliche
-Issue-Kommentare und trennen sich nur im Text. Beim Draft gibt es überhaupt
-nichts, weil Codex nicht anläuft; ein kommentarloser Draft ist deshalb kein
-Beleg, sondern ein nicht durchgeführter Test.
+Issue-Kommentare und trennen sich nur im Text. Beim Draft greift ohne
+manuellen Anstoss kein Auslöser, dort steht dann überhaupt nichts; ein
+kommentarloser Draft ist deshalb kein Beleg, sondern ein nicht durchgeführter
+Test. Ein von Hand angestossener Lauf hinterlässt dagegen auch auf einem Draft
+dieselben Spuren wie sonst — Statusbericht, Review-Objekt oder
+Befundlos-Meldung —, und die zählen dort genauso.
 
 Der fünfte Grund ist der gefährlichste, weil er nicht wie eine Lücke aussieht,
 sondern wie ein Beleg: Nach einem Push steht das Review-Objekt des *vorigen*
