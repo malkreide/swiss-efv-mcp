@@ -26,7 +26,12 @@ class Point(BaseModel):
     value: float | None
     kind: str | None = Field(
         default=None,
-        description="raw EFV source label, e.g. 'Financial statements', 'Budget/financial plans'",
+        description=(
+            "raw EFV source label, passed through verbatim — e.g. 'Rechnung', "
+            "'Prognosen'. The source picks its own wording and has switched "
+            "language before (English until 2026-08-27), so branch on "
+            "`is_projection` rather than on this string."
+        ),
     )
     is_projection: bool | None = Field(
         default=None,
