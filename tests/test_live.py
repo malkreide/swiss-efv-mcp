@@ -26,6 +26,7 @@ from swiss_efv_mcp.client import (
     EFVClient,
     clean,
     is_projection,
+    to_year,
 )
 from swiss_efv_mcp.server import (
     budget_impl,
@@ -192,19 +193,46 @@ async def test_live_projections_survive_into_the_tool(client):
         "`test_live_source_vocabulary_is_fully_mapped` tells the two apart."
     )
 
-    # One slice the raw rows say must contain a projection, queried through the
-    # real tool. A flag that exists in the CSV but is lost on the way out is
-    # exactly the production failure this suite is for.
+    # One raw row the file says is a projection, followed through the real tool.
+    # A flag that exists in the CSV but is lost on the way out is exactly the
+    # production failure this suite is for.
+    #
+    # THE POINT IS MATCHED BY YEAR, not merely looked for in the series.
+    # `any(p.is_projection ...)` over the whole slice was the first version and
+    # was wrong twice over: a slice with several projection years stays green
+    # when THIS row is dropped or loses its flag, because another one satisfies
+    # it — and the failure message names this row's year while asserting
+    # nothing about it, so it would have reported a survival it never checked.
+    #
+    # On 2026-08-29 every slice happened to carry exactly one projection year
+    # (75 rows, 75 slices), so the hole was latent rather than open. It is not
+    # hypothetical: until 2026-08-27 the Bund's Voranschlag/Finanzplan ran
+    # 2026-2029, four projection years to a slice, and a restored plan horizon
+    # opens it again.
     zeile = vorausschauend[0]
+    jahr = to_year(zeile["jahr"])
     res = await headline_impl(
         client,
         variable=clean(zeile["variable"]),
         household=clean(zeile["hh"]),
         model=clean(zeile["model"]),
     )
-    assert any(p.is_projection for p in res.points), (
-        f"raw row {zeile['hh']}/{zeile['model']}/{zeile['variable']}/{zeile['jahr']} "
-        f"is labelled {zeile['source']!r}, but no point of that series comes out flagged"
+    herkunft = f"{zeile['hh']}/{zeile['model']}/{zeile['variable']}/{zeile['jahr']}"
+    punkt = next((p for p in res.points if p.year == jahr), None)
+    assert punkt is not None, (
+        f"raw row {herkunft} is in the dump, but the tool returns no point for "
+        f"that year — years it does return: {[p.year for p in res.points]}"
+    )
+    assert punkt.is_projection is True, (
+        f"raw row {herkunft} is labelled {zeile['source']!r}, which "
+        f"`is_projection` maps to True, but the point comes out with "
+        f"is_projection={punkt.is_projection!r}"
+    )
+    # The raw label reaches the caller unchanged. `kind` is documented as
+    # passed through verbatim, and that is the half `is_projection` cannot show.
+    assert punkt.kind == clean(zeile["source"]), (
+        f"raw row {herkunft} is labelled {zeile['source']!r}, but the point "
+        f"carries kind={punkt.kind!r}"
     )
 
 
