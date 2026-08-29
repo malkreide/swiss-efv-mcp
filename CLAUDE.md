@@ -245,11 +245,34 @@ geblieben, während im PR ein echtes Review stand und das Häkchen erfüllt
 aussah — dieselbe Klasse wie die drei bis fünf Sekunden zwischen «ready» und
 Merge weiter unten, nur schwerer zu bemerken, weil hier etwas *da* ist.
 
-Der Test, der das trennt, ist billig: **die Commit-Angabe im Review gegen den
-aktuellen Head halten.** Steht dort ein anderer, ist der Head ungeprüft, ganz
-gleich wie viele Reviews im PR stehen. Wer nach einem Push weiterarbeiten will,
-kommentiert «@codex review» — sonst gilt der eigene Fix als geprüft, ohne es zu
-sein.
+Die richtige Frage ist deshalb nie «steht ein Review im PR», sondern **«nennt
+das jüngste Codex-Ergebnis den aktuellen Head»**. Wer nach einem Push
+weiterarbeiten will, kommentiert «@codex review» — sonst gilt der eigene Fix als
+geprüft, ohne es zu sein.
+
+Nur gegen das Review-**Objekt** zu prüfen reicht dafür nicht, und zwar in beide
+Richtungen falsch:
+
+- Ein befundloser Lauf erzeugt gar kein Review-Objekt, sondern einen
+  Issue-Kommentar. Nach einem befundlosen Wiederholungslauf zeigt das noch
+  vorhandene Objekt weiter auf den **alten** Commit — der Head ist geprüft, die
+  Prüfung meldet Fehlalarm. Genau so lag es auf `swiss-efv-mcp#62`: Objekt auf
+  `cd2046c`, befundloser Lauf auf `ca00672` nur als Kommentar.
+- Umgekehrt bleibt eine ältere Befundlos-Meldung nach dem nächsten Push
+  einfach stehen. «Es gibt eine Befundlos-Meldung» belegt damit gar nichts.
+
+Zwei Anker, in dieser Reihenfolge:
+
+1. **Der Statusbericht.** Seine Zeile `✅ Completed` nennt den geprüften Commit
+   und ist das einzige Objekt, das beide Ausgänge gleich behandelt. Stimmt der
+   Commit mit dem Head, ist der Head geprüft.
+2. **Fehlt der Bericht**, trägt jedes Codex-Ergebnis seinen Commit selbst — das
+   Review-Objekt wie die Befundlos-Meldung, beide als «Reviewed commit». Dann
+   das **jüngste** von beiden nehmen und dessen Commit vergleichen; das ältere
+   sagt nichts über den Head.
+
+Was in keinem Fall trägt: die blosse Anwesenheit eines Review-Objekts oder
+einer Befundlos-Meldung, ohne den Commit darin zu lesen.
 
 Das sind verschiedene Abfragen — `get_reviews` fürs Objekt, `get_comments` für
 alles andere; wer nur eine nimmt, übersieht den Rest. Genau so ist die
@@ -283,36 +306,31 @@ geprüften Commit und den Auslöser, beantwortet also genau die Frage, die der
 fünfte Grund oben aufwirft.
 
 **Zur 👍-Reaktion: zwei Fassungen lang wurde am falschen Objekt gemessen.**
-Der Infokasten verspricht sie («otherwise it will react with 👍», in der
-ausführlicheren Fassung «reacts with 👀 while any review is running … reacts
-with 👍 once all reviews finish with no findings»). Hier stand daraufhin, der
-Kasten sei keine Quelle — belegt mit sechs Repos am 23.8., in denen die
-Befundlos-Meldung kam und keine Reaktion.
+Hier stand, der Infokasten sei keine Quelle — belegt mit sechs Repos am 23.8., in
+denen die Befundlos-Meldung kam «und in keinem die Reaktion». Gesucht wurde an
+den Kommentaren. Dort ist nie eine.
 
-Nachgemessen am 29.8.2026 auf `swiss-efv-mcp#62`, nach einem befundlosen Lauf,
-also genau in dem Fall, für den der Kasten das 👍 verspricht:
+Die Reaktion sitzt **am PR**. Am 29.8.2026 auf `swiss-efv-mcp#64` durchgemessen,
+an einem PR, den ausser Codex niemand angefasst hatte:
 
-| Objekt | Reaktionen |
-|---|---|
-| Befundlos-Kommentar | `total_count: 0` |
-| Statusbericht | `total_count: 0` |
-| Auslöser-Kommentar («@codex review») | `total_count: 0` |
-| **der PR selbst** | `total_count: 1`, davon `+1: 1` |
+| Zeitpunkt | Zustand des Laufs | Reaktionen am PR |
+|---|---|---|
+| 16:54:30 | gestartet | `eyes: 1` |
+| 16:56:27 | fertig, **mit** Befund | `total_count: 0` — 👀 wieder entfernt |
 
-Auf den Kommentaren ist nichts, auf dem PR ist genau ein 👍. Wer nur die
-Kommentare abfragt, findet keine Reaktion und schliesst daraus, es gebe keine —
-das ist vermutlich die Messung von damals.
+Und auf `#62` nach einem befundlosen Lauf: `+1: 1` am PR, `0` an jedem der drei
+Kommentare. Codex setzt die Reaktion also, nimmt sie zurück und unterscheidet
+die Ausgänge — genau wie der Kasten es beschreibt («reacts with 👀 while any
+review is running … reacts with 👍 once all reviews finish with no findings»).
 
-**Wer das 👍 gesetzt hat, ist damit trotzdem nicht entschieden.** Codex kommt in
-Frage, ein Mensch am selben PR auch; der REST-Endpunkt, der die Urheber nennt
-(`/issues/{n}/reactions`), ist aus den Agent-Sessions nicht erreichbar, und
-`issue_read` liefert nur die Summen. Die Zeile «der Kasten ist keine Quelle» ist
-damit nicht widerlegt, sondern **unbelegt in beide Richtungen** — sie stand hier
-nur deshalb, weil an den Kommentaren gesucht wurde. Wer sie klären will, braucht
-die Urheber der Reaktion, nicht ihre Zahl.
+Die alte Zeile war damit nicht vorsichtig, sondern **falsch**: Sie hat aus einer
+Messung am falschen Ort auf eine Lüge geschlossen. Der Kasten stimmt hier.
 
-Bis dahin gilt unverändert: Belegt ist eine Prüfung durch ein Review-Objekt oder
-eine Befundlos-Meldung, nicht durch eine Reaktion.
+Das ändert nichts an der Beweisregel, sondern nur an ihrer Begründung: Belegt
+ist eine Prüfung durch ein Review-Objekt oder eine Befundlos-Meldung — die
+Reaktion taugt trotzdem nicht dafür, weil sie den geprüften Commit nicht nennt
+und beim nächsten Lauf überschrieben wird. Sie sagt «gerade läuft etwas» oder
+«der letzte Lauf war sauber», nie «dieser Head ist geprüft».
 
 Und ein befundloser Lauf ist kein Freispruch. Am 23.8. lief derselbe Text durch
 42 Reviews: 36 meldeten denselben P2-Befund, 6 die Befundlos-Meldung — gleiche
