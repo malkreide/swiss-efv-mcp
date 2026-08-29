@@ -221,9 +221,11 @@ Vermutung über die Reihenfolge.
 Praktisch heisst das: **Eine verschwundene Limit-Meldung ist keine Entwarnung.**
 Sie kann bedeuten, dass das Kontingent wieder da ist — und dass jetzt etwas
 anderes den Review verhindert. Belegt ist eine Prüfung erst durch ein
-Review-Objekt **oder** eine Befundlos-Meldung. Wer nur das Objekt gelten lässt,
-zählt jeden befundlosen Review als ungeprüft — und baut sich denselben Fehlalarm
-ein, den dieser Abschnitt verhindern soll, nur in die andere Richtung.
+Review-Objekt **oder** eine Befundlos-Meldung — **und beide zählen nur für den
+Commit, den sie selbst nennen** (weiter unten, «Nennt das jüngste
+Codex-Ergebnis den aktuellen Head»). Wer nur das Objekt gelten lässt, zählt
+jeden befundlosen Review als ungeprüft — und baut sich denselben Fehlalarm ein,
+den dieser Abschnitt verhindern soll, nur in die andere Richtung.
 
 «Kein Kommentar» heisst also nicht «geprüft und sauber». Unterscheiden lässt es
 sich an der Form: Ein Review **mit** Befund ist ein Review-Objekt
@@ -327,10 +329,11 @@ Die alte Zeile war damit nicht vorsichtig, sondern **falsch**: Sie hat aus einer
 Messung am falschen Ort auf eine Lüge geschlossen. Der Kasten stimmt hier.
 
 Das ändert nichts an der Beweisregel, sondern nur an ihrer Begründung: Belegt
-ist eine Prüfung durch ein Review-Objekt oder eine Befundlos-Meldung — die
-Reaktion taugt trotzdem nicht dafür, weil sie den geprüften Commit nicht nennt
-und beim nächsten Lauf überschrieben wird. Sie sagt «gerade läuft etwas» oder
-«der letzte Lauf war sauber», nie «dieser Head ist geprüft».
+ist eine Prüfung durch ein Review-Objekt oder eine Befundlos-Meldung, das
+jeweils den aktuellen Head nennt. Die Reaktion taugt dafür nicht — und der
+Grund ist genau der Commit: Sie nennt keinen und wird beim nächsten Lauf
+überschrieben. Sie sagt «gerade läuft etwas» oder «der letzte Lauf war sauber»,
+nie «dieser Head ist geprüft».
 
 Und ein befundloser Lauf ist kein Freispruch. Am 23.8. lief derselbe Text durch
 42 Reviews: 36 meldeten denselben P2-Befund, 6 die Befundlos-Meldung — gleiche
