@@ -26,6 +26,7 @@ from swiss_efv_mcp.client import (
     EFVClient,
     clean,
     is_projection,
+    to_year,
 )
 from swiss_efv_mcp.server import (
     budget_impl,
@@ -145,8 +146,9 @@ async def test_live_headline_saldo_is_classified_and_current(client):
     ends at 2025 and every one of its rows is `Rechnung`. Those two assertions
     were claims about what the EFV chooses to publish, not about this server,
     and the source is entitled to change its mind — so the projection claim
-    moved to `test_live_staat_has_projection`, where forward years actually
-    still live, and the horizon claim became the staleness floor below.
+    moved to `test_live_projections_survive_into_the_tool`, which asks the dump
+    where forward years actually live instead of naming a household, and the
+    horizon claim became the staleness floor below.
     """
     res = await headline_impl(client, variable="saldo", household="bund", model="fs")
     assert len(res.points) > 20
@@ -164,17 +166,74 @@ async def test_live_headline_saldo_is_classified_and_current(client):
     )
 
 
-async def test_live_staat_has_projection(client):
-    """The aggregate state still publishes forward-looking years.
+async def test_live_projections_survive_into_the_tool(client):
+    """The dump still marks forward-looking years, and the flag reaches the tool.
 
     Asserted through `is_projection`, not against the label. Until 2026-08-27
-    this read `p.kind == "Forecasts"`; the source now writes `Prognosen` for
-    the same thing, and pinning the next literal would just re-arm the same
-    trap. What the server promises its callers is the flag, so that is what
-    the live suite checks — the label vocabulary has its own test above.
+    this read `p.kind == "Forecasts"` on `staat`/`einnahmen`; the source now
+    writes `Prognosen` for the same thing, and pinning the next literal would
+    just re-arm the same trap. What the server promises its callers is the
+    flag, so that is what the live suite checks — the label vocabulary has its
+    own test above.
+
+    The household and variable are DERIVED from the dump, not written into the
+    test. Pinning them re-armed a second trap: on 2026-08-29 `staat`/`fs`/
+    `einnahmen` carried exactly ONE projection row (2025, `Prognosen`), out of
+    75 in the whole file. The next vintage that settles the 2025 state accounts
+    flips that single row to `Rechnung` and turns this red — for a change in
+    what the EFV publishes, which is the very thing that made the old Bund test
+    a bad test. Asking the file which slice to query keeps the claim on the
+    server: wherever the source marks a projection, the tool must surface it.
     """
-    res = await headline_impl(client, variable="einnahmen", household="staat", model="fs")
-    assert any(p.is_projection for p in res.points)
+    rows, _ = await client.load("headline")
+    vorausschauend = [r for r in rows if is_projection(clean(r.get("source"))) is True]
+    assert vorausschauend, (
+        "the dump carries no forward-looking rows at all. Either the EFV stopped "
+        "publishing them, or their label is unmapped — "
+        "`test_live_source_vocabulary_is_fully_mapped` tells the two apart."
+    )
+
+    # One raw row the file says is a projection, followed through the real tool.
+    # A flag that exists in the CSV but is lost on the way out is exactly the
+    # production failure this suite is for.
+    #
+    # THE POINT IS MATCHED BY YEAR, not merely looked for in the series.
+    # `any(p.is_projection ...)` over the whole slice was the first version and
+    # was wrong twice over: a slice with several projection years stays green
+    # when THIS row is dropped or loses its flag, because another one satisfies
+    # it — and the failure message names this row's year while asserting
+    # nothing about it, so it would have reported a survival it never checked.
+    #
+    # On 2026-08-29 every slice happened to carry exactly one projection year
+    # (75 rows, 75 slices), so the hole was latent rather than open. It is not
+    # hypothetical: until 2026-08-27 the Bund's Voranschlag/Finanzplan ran
+    # 2026-2029, four projection years to a slice, and a restored plan horizon
+    # opens it again.
+    zeile = vorausschauend[0]
+    jahr = to_year(zeile["jahr"])
+    res = await headline_impl(
+        client,
+        variable=clean(zeile["variable"]),
+        household=clean(zeile["hh"]),
+        model=clean(zeile["model"]),
+    )
+    herkunft = f"{zeile['hh']}/{zeile['model']}/{zeile['variable']}/{zeile['jahr']}"
+    punkt = next((p for p in res.points if p.year == jahr), None)
+    assert punkt is not None, (
+        f"raw row {herkunft} is in the dump, but the tool returns no point for "
+        f"that year — years it does return: {[p.year for p in res.points]}"
+    )
+    assert punkt.is_projection is True, (
+        f"raw row {herkunft} is labelled {zeile['source']!r}, which "
+        f"`is_projection` maps to True, but the point comes out with "
+        f"is_projection={punkt.is_projection!r}"
+    )
+    # The raw label reaches the caller unchanged. `kind` is documented as
+    # passed through verbatim, and that is the half `is_projection` cannot show.
+    assert punkt.kind == clean(zeile["source"]), (
+        f"raw row {herkunft} is labelled {zeile['source']!r}, but the point "
+        f"carries kind={punkt.kind!r}"
+    )
 
 
 async def test_live_dimensions_nonempty(client):

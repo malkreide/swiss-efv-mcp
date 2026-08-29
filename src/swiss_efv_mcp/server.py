@@ -257,9 +257,9 @@ async def fiscal_headline(
     ctx: Context | None = None,
 ) -> HeadlineSeries:
     """Headline fiscal time series: revenue, expenditure, balance and debt ratios
-    from 1990 to the latest year the EFV publishes (actuals, plus budget and
-    forecast years wherever the source carries them — which households get
-    forward years, and how far, is the source's call and has changed before).
+    from 1990 to the latest year the EFV publishes, actuals and forward-looking
+    years alike. Read `is_projection` per point to tell them apart; not every
+    household carries forward years.
 
     Use case: track how a federal aggregate evolved over time — e.g. "how did the
     Bund balance develop since the 2022 rate turnaround?". variable e.g. 'saldo',
