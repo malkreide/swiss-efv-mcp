@@ -131,8 +131,13 @@ DATASETS: dict[str, Dataset] = {
     "headline": Dataset(
         "headline",
         f"{_DATA_FINANCE}/fs_dashboard/main_extern.csv",
-        516_025,
-        "Hauptaggregate und Prognosen, hh x model x variable x jahr, 1990-2029",
+        413_725,
+        # Kein festes Endjahr mehr: Der Horizont gehoert der Quelle. Bis zum
+        # 2026-08-27 reichte die Datei mit Voranschlag/Finanzplan bis 2029; die
+        # Neuveroeffentlichung jenes Tages liess die Planjahre des Bundes weg
+        # und endet bei 2025. Eine Zahl, die das behauptet, wird beim naechsten
+        # Vintage wieder falsch, ohne dass jemand sie anfasst.
+        "Hauptaggregate und Prognosen, hh x model x variable x jahr, ab 1990",
     ),
     "budget": Dataset(
         "budget",
@@ -457,12 +462,49 @@ def to_year(value: str | None) -> int | None:
 # years are "Budget/financial plans" (Voranschlag/Finanzplan); "Forecasts" is
 # reserved for the aggregate state (hh=staat). Map both to is_projection so the
 # agent never has to know the taxonomy.
-_PROJECTION_SOURCES = {"Budget/financial plans", "Forecasts", "Survey budget"}
+#
+# THE 2026-08-27 DRIFT
+# --------------------
+# On that day the EFV republished `main_extern.csv` (Last-Modified 07:06 UTC)
+# with the entire `source` column switched from English to German. Nothing else
+# moved: same URL, same header, same columns, same seven fields. But every
+# label below stopped matching at once, `is_projection` answered `None` for all
+# 6110 rows, and `fiscal_headline` quietly stopped flagging projections.
+#
+# Not one unit test could see it — they run on hand-written and recorded rows,
+# both English. The live suite caught it the next night, but only as two
+# unrelated `assert False`; what the label vocabulary had done was nowhere in
+# the message. `test_live_source_vocabulary_is_fully_mapped` now says it by
+# name, and that is the guard that generalises past this particular switch.
+#
+# Both vocabularies stay mapped. The English one is not dead weight: the
+# recorded fixture of 2026-08-14 still carries it, and a source that changed
+# language once can change back.
+#
+# Only the three German labels the dump actually carries today are listed —
+# `Rechnung` (5457 rows), `Prognosen` (75) and `Vorhandene Daten` (28),
+# counted against the live file on 2026-08-29. The German for the other four
+# English labels is deliberately NOT guessed here: an invented string looks
+# exactly like a verified one and would quietly claim a coverage nobody
+# measured. The vocabulary test names the next unmapped label the day it
+# appears, which is the honest way to learn the rest.
+_PROJECTION_SOURCES = {
+    # English, as published up to 2026-08-27
+    "Budget/financial plans",
+    "Forecasts",
+    "Survey budget",
+    # German, as published since 2026-08-27
+    "Prognosen",
+}
 _ACTUAL_SOURCES = {
+    # English, as published up to 2026-08-27
     "Financial statements",
     "Provisional financial statements",
     "Data available",
     "Survey financial statements",
+    # German, as published since 2026-08-27
+    "Rechnung",
+    "Vorhandene Daten",
 }
 
 

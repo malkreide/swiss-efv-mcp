@@ -9,6 +9,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Behoben
 
+- **Die EFV stellte die `source`-Spalte auf Deutsch um — `is_projection` fiel
+  fuer jede Zeile auf `None`.** Am 27.8.2026 wurde
+  `fs_dashboard/main_extern.csv` neu veroeffentlicht (Last-Modified 07:06 UTC),
+  mit `Rechnung` statt `Financial statements`, `Prognosen` statt `Forecasts`
+  und `Vorhandene Daten` statt `Data available`. Sonst aenderte sich nichts:
+  gleiche URL, gleiche Kopfzeile, gleiche sieben Spalten, HTTP 200.
+
+  Damit kannte `_PROJECTION_SOURCES`/`_ACTUAL_SOURCES` keine einzige der 6110
+  Zeilen mehr, und `fiscal_headline` kennzeichnete produktiv keinen Punkt mehr
+  als Prognose. Kein Unit-Test sah es — sie fahren auf handgeschriebenen und
+  aufgezeichneten Zeilen, beide englisch. Die Live-Suite fiel in der Nacht
+  darauf, aber nur als zwei zusammenhanglose `assert False`; dass der Wortschatz
+  gewechselt hatte, stand in keiner Meldung.
+
+  Beide Wortschaetze sind jetzt abgebildet. Der englische bleibt: Die
+  Aufzeichnung vom 14.8.2026 traegt ihn, und eine Quelle, die einmal die
+  Sprache wechselt, kann zurueckwechseln. Fuer die vier englischen Marken ohne
+  heute belegte deutsche Entsprechung wird **keine** Uebersetzung geraten — ein
+  ausgedachter String sieht aus wie ein gemessener.
+
+- **`1990-2029` stimmte nicht mehr.** Dieselbe Neuveroeffentlichung liess die
+  Voranschlags- und Finanzplanjahre des Bundes weg; die Datei endet bei 2025
+  (6110 statt 6579 Zeilen, 414 statt 516 KB). Die Registry-Notiz und die
+  Tool-Beschreibung von `fiscal_headline` nannten den alten Horizont als
+  Zusicherung und haetten eine Agentin nach Planjahren suchen lassen, die es
+  nicht gibt. Beide nennen jetzt kein festes Endjahr mehr — der Horizont
+  gehoert der Quelle.
+
+### Hinzugefuegt
+
+- **`test_live_source_vocabulary_is_fully_mapped` benennt die naechste Drift.**
+  Der Test faehrt jede verschiedene `source`-Marke des Dumps durch
+  `is_projection` und faellt mit den unbekannten im Klartext:
+  «`source` labels the client cannot classify: ['Prognosen', 'Rechnung',
+  'Vorhandene Daten']». Gegen die Funktion selbst gefragt, nicht gegen eine
+  Kopie der beiden Mengen — eine Kopie stimmt sich selbst zu, waehrend die
+  Produktion unabgebildet laeuft.
+
+  Das ist die Meldung, die am 27.8. gefehlt hat. `None` von `is_projection`
+  liest sich als «diese Zeile sagt nichts» und unterschlaegt damit genau den
+  Unterschied, auf den es ankommt: ob die Quelle geschwiegen oder ihre
+  Taxonomie verschoben hat.
+
+- **`tests/test_source_vocabulary.py`** haelt beide Wortschaetze im
+  pytest-Gate fest, einzeln je Marke und einmal durch `headline_impl`. Jede
+  Marke ist nachweislich tragend: Wird sie entfernt, fallen genau die Tests,
+  die sie nennen.
+
+### Geaendert
+
+- **Die beiden roten Live-Tests pruefen jetzt die Zusage, nicht die Vokabel.**
+  `test_live_staat_has_forecasts_label` hing an `p.kind == "Forecasts"`; das
+  ist jetzt `test_live_staat_has_projection` und fragt `is_projection`, denn
+  die Zusage an den Aufrufer ist die Kennzeichnung, nicht der Rohtext der EFV.
+  `test_live_headline_saldo_has_projection` verlangte vom Bund Planjahre bis
+  2028 — eine Aussage darueber, was die EFV veroeffentlicht, nicht darueber,
+  was dieser Server tut. Als `test_live_headline_saldo_is_classified_and_current`
+  prueft er stattdessen, dass jeder Punkt klassifiziert ist, und haelt mit
+  `Jahr - 2` eine Alterungsschwelle statt eines Horizonts: `Jahr - 1` faellt
+  jeden Januar, bevor die Rechnung des Vorjahres erscheint.
+
+- **`timeout-minutes` in `live.yml` von 15 auf 20.** Der siebte Live-Test
+  sprengt sonst `test_live_budget_fits_the_job_timeout`: 75 s mal sieben Tests
+  mal Sicherheitsfaktor 2 sind 1050 s gegen 900 s. Das Gate hat genau dort
+  gegriffen, wofuer es gebaut wurde — im PR, nicht nachts.
+
+### Behoben
+
 - **`DELETE` fehlte in `allow_methods`.** Der Preflight wies die Methode mit 400
   ab, ein Browser-Client konnte also Sessions öffnen, aber nie schliessen. Das
   SDK bedient sie sehr wohl — `_handle_delete_request` in

@@ -32,7 +32,12 @@ jobs:
   live:
     name: Live-Suite gegen data.finance.admin.ch
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Gehalten von `test_live_budget_fits_the_job_timeout`: Budget mal Anzahl
+    # Live-Tests, mit Sicherheitsfaktor 2, muss hier hineinpassen. Bei 75 s und
+    # sieben Tests sind das 1050 s — die bisherigen 15 Minuten reichten fuer
+    # sechs Tests und keinen mehr. Wer einen Test ergaenzt, rechnet hier nach;
+    # der Gate faellt sonst im PR, nicht erst nachts.
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v7

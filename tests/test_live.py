@@ -15,10 +15,18 @@ The session-scoped client requires a session-scoped event loop, hence the
 ``loop_scope`` on both the fixture and the module-wide asyncio marker.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 import pytest_asyncio
 
-from swiss_efv_mcp.client import EFVClient
+from swiss_efv_mcp.client import (
+    _ACTUAL_SOURCES,
+    _PROJECTION_SOURCES,
+    EFVClient,
+    clean,
+    is_projection,
+)
 from swiss_efv_mcp.server import (
     budget_impl,
     dimensions_impl,
@@ -57,9 +65,11 @@ pytestmark = [pytest.mark.live, pytest.mark.asyncio(loop_scope="session")]
 # A failed fetch is not cached, so every test that needs a dead dataset runs
 # the full ladder again — that is the 2026-08-01 incident in the docstring
 # above (four tests, 17 minutes). This budget re-opens a bounded share of it:
-# six tests at 75s is 7.5 minutes worst case, against the job's
-# `timeout-minutes: 15`. `test_live_budget_fits_the_job_timeout` holds that
-# pair together.
+# seven tests at 75s is 8.75 minutes worst case, against the job's
+# `timeout-minutes: 20`. `test_live_budget_fits_the_job_timeout` holds that
+# pair together, with a safety factor of 2 — which is why adding the seventh
+# test on 2026-08-29 required raising the job timeout from 15 minutes rather
+# than merely noticing afterwards that it had grown too tight.
 #
 # The bound only bites on a TOTAL outage — and a total outage is what
 # `live_streak.py` is there to name. A brief hiccup, the case this is for,
@@ -93,19 +103,78 @@ async def client():
         await c.aclose()
 
 
-async def test_live_headline_saldo_has_projection(client):
-    # For the Bund, forward years are labelled "Budget/financial plans", not
-    # "Forecasts" — is_projection abstracts over that.
+async def test_live_source_vocabulary_is_fully_mapped(client):
+    """Every `source` label in the dump must be one `is_projection` classifies.
+
+    This is the test the 2026-08-27 drift needed and did not have. That night
+    the EFV switched the whole column from English to German; `is_projection`
+    fell through to `None` for all 6110 rows and `fiscal_headline` stopped
+    flagging projections in production. The only symptom was two *other* tests
+    failing with a bare `assert False`, and neither of them mentioned labels.
+
+    An unmapped label is not a missing value. `None` from `is_projection` reads
+    as "this row does not say", when what happened is that the taxonomy moved
+    underneath us — so it has to be reported by name, not inferred from a
+    downstream assertion that happens to sit on top of it.
+
+    Asserted through `is_projection` itself rather than against a copy of the
+    two sets: a copy would agree with itself while production went unmapped.
+    """
+    rows, _ = await client.load("headline")
+    labels = {clean(r.get("source")) for r in rows}
+    # `NA` is the source's own "missing", cleaned to None by `_NULLISH`. Those
+    # rows genuinely carry no label; they are not a vocabulary we failed to map.
+    labels.discard(None)
+    assert labels, "the dump carries no `source` labels at all — column renamed?"
+    unmapped = sorted(label for label in labels if is_projection(label) is None)
+    assert not unmapped, (
+        f"`source` labels the client cannot classify: {unmapped}. "
+        f"Known: {sorted(_PROJECTION_SOURCES | _ACTUAL_SOURCES)}. "
+        "The EFV changed its vocabulary — decide per label whether it is "
+        "forward-looking or settled, then extend _PROJECTION_SOURCES / "
+        "_ACTUAL_SOURCES in client.py. Do not guess a translation."
+    )
+
+
+async def test_live_headline_saldo_is_classified_and_current(client):
+    """The Bund's balance series: long, fully classified, and still moving.
+
+    Up to 2026-08-27 this test also asserted `any(p.is_projection)` and a plan
+    horizon of `>= 2028`, because the dump carried the Bund's
+    Voranschlag/Finanzplan years. That republish dropped them: `hh=bund` now
+    ends at 2025 and every one of its rows is `Rechnung`. Those two assertions
+    were claims about what the EFV chooses to publish, not about this server,
+    and the source is entitled to change its mind — so the projection claim
+    moved to `test_live_staat_has_projection`, where forward years actually
+    still live, and the horizon claim became the staleness floor below.
+    """
     res = await headline_impl(client, variable="saldo", household="bund", model="fs")
     assert len(res.points) > 20
-    assert any(p.is_projection for p in res.points)
-    assert res.points[-1].year >= 2028  # plan horizon reaches out
+    # Every point classified. Without this, the language switch would have left
+    # this test green: `is_projection=None` on all 36 points breaks nothing a
+    # count of points can see.
+    unclassified = [p.year for p in res.points if p.is_projection is None]
+    assert not unclassified, f"years with an unclassifiable `source`: {unclassified}"
+    # A staleness floor, not a horizon. `year - 1` would break every January,
+    # when the previous year's Rechnung is not published yet; `year - 2` still
+    # catches the case this is for — a dump nobody maintains any more.
+    floor = datetime.now(UTC).year - 2
+    assert res.points[-1].year >= floor, (
+        f"series stops at {res.points[-1].year}, expected {floor} or later — the dump looks frozen"
+    )
 
 
-async def test_live_staat_has_forecasts_label(client):
-    # The aggregate state does use the "Forecasts" label.
+async def test_live_staat_has_projection(client):
+    """The aggregate state still publishes forward-looking years.
+
+    Asserted through `is_projection`, not against the label. Until 2026-08-27
+    this read `p.kind == "Forecasts"`; the source now writes `Prognosen` for
+    the same thing, and pinning the next literal would just re-arm the same
+    trap. What the server promises its callers is the flag, so that is what
+    the live suite checks — the label vocabulary has its own test above.
+    """
     res = await headline_impl(client, variable="einnahmen", household="staat", model="fs")
-    assert any(p.kind == "Forecasts" for p in res.points)
+    assert any(p.is_projection for p in res.points)
 
 
 async def test_live_dimensions_nonempty(client):
