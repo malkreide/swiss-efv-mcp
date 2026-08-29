@@ -242,7 +242,12 @@ ohne dass jemand hineingesehen hat, und am 22.8. noch einmal 43.
 
   Der Schlusssatz wechselt bei jedem Lauf («Delightful!», «Keep it up!»,
   «More of your lovely PRs please.»); stabil ist nur der Satz davor.
-- **Der PR ist ein Draft** — darauf läuft Codex nicht an.
+- **Der PR ist ein Draft** — die *automatischen* Auslöser greifen dort nicht.
+  Von Hand angestossen läuft Codex sehr wohl auf einem Draft: am 29.8.2026 auf
+  `swiss-efv-mcp#64`, 16 Sekunden nach dem Anlegen, Auslöser «Manual request».
+  Das ist zugleich der Weg, einen Draft prüfen zu lassen, **bevor** man ihn auf
+  ready stellt — und damit das Gegenmittel zu den Sekunden zwischen «ready» und
+  Merge weiter unten.
 - **Das Kontingent ist weg** — dann schreibt er die Meldung oben.
 - **Für das Repo fehlt eine Environment** — dann schreibt er:
 
