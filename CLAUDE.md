@@ -367,15 +367,20 @@ Codex sie nicht mehr.
 - Der **Statusbericht** nennt den geprüften Commit, sagt aber nichts über den
   Ausgang.
 - Die **Reaktion am PR** sagt den Ausgang — 👍 heisst «ohne Befund» —, nennt
-  aber keinen Commit.
+  aber keinen Commit. Sie braucht eine **eigene Abfrage**: `issue_read` mit
+  Methode `get` auf die PR-Nummer, dort das Feld `reactions`. Weder
+  `get_reviews` noch `get_comments` liefert sie; an den Kommentaren sitzt
+  ohnehin nie eine (siehe unten).
 
 Erst beide zusammen ergeben «`34021a9` wurde geprüft und war sauber». Das ist
 der einzige Fall, in dem die Reaktion etwas beiträgt. Sie ersetzt den Beleg
 nicht; sie liefert die Hälfte, die dem Bericht fehlt.
 
 Das sind verschiedene Abfragen — `get_reviews` fürs Objekt, `get_comments` für
-alles andere; wer nur eine nimmt, übersieht den Rest. Genau so ist die
-Limit-Meldung zuerst durchgerutscht.
+die Kommentare; wer nur eine nimmt, übersieht den Rest. Genau so ist die
+Limit-Meldung zuerst durchgerutscht. «Alles andere» deckt `get_comments` aber
+nicht ab: Die Reaktion am PR liegt in keiner der beiden und braucht die dritte
+Abfrage von oben.
 
 Der Kommentarzähler allein reicht ohnehin nicht: `comments: 1` kann die
 Befundlos-, die Kontingent- **oder** die Environment-Meldung sein — und seit dem
