@@ -305,18 +305,17 @@ jeden befundlosen Review als ungeprüft — und baut sich denselben Fehlalarm ei
 den dieser Abschnitt verhindern soll, nur in die andere Richtung.
 
 «Kein Kommentar» heisst also nicht «geprüft und sauber». Unterscheiden lässt es
-sich an der Form: Ein Review **mit** Befund ist ein Review-Objekt
-(«💡 Codex Review», mit Commit-Angabe); ein Review **ohne** Befund und die
-beiden Ausfallmeldungen — Kontingent wie Environment — sind gewöhnliche
-Issue-Kommentare und trennen sich nur im Text.
+sich an der Form, aber nur für zwei der vier: Ein Review **mit** Befund ist ein
+Review-Objekt («💡 Codex Review», mit Commit-Angabe), ein Review **ohne** Befund
+ein gewöhnlicher Issue-Kommentar. **Die beiden Ausfallmeldungen — Kontingent wie
+Environment — sind an der Form nicht festzumachen**: Sie erscheinen als
+Issue-Kommentar *oder* als Review-Kommentar in einem Thread und trennen sich
+untereinander nur im Text.
 
-**Die Form trägt für die Ausfallmeldungen aber nicht.** Am 30.8.2026 stand die
-Environment-Meldung auf `swiss-efv-mcp#70` als **Review-Kommentar in einem
-Thread**, acht Sekunden nach einer Antwort in genau diesem Thread — nicht als
-Issue-Kommentar. Wer die Ausfallmeldungen nur unter den PR-Kommentaren sucht,
-übersieht sie dort. Für Review-Objekt und Befundlos-Meldung gilt die
-Unterscheidung weiter; für die beiden Ausfälle ist sie nur ein Ort von
-mehreren.
+Der zweite Ort ist am 30.8.2026 auf `swiss-efv-mcp#70` gemessen: Die
+Environment-Meldung stand dort im Thread, acht Sekunden nach einer Antwort in
+genau diesem Thread. Wer die Ausfallmeldungen nur unter den PR-Kommentaren
+sucht, übersieht sie.
 
 (Ob die Thread-Antwort selbst ein Auslöser ist, gibt die Messung nicht her —
 belegt ist nur, dass die Meldung acht Sekunden danach kam. Der Infokasten
@@ -371,7 +370,7 @@ Zwei Anker, in dieser Reihenfolge:
 Was in keinem Fall trägt: die blosse Anwesenheit eines Review-Objekts oder
 einer Befundlos-Meldung, ohne den Commit darin zu lesen.
 
-**Liegt der Auslöser vor dem Merge und das Ergebnis danach, entfällt es.**
+**Zwei Läufe, deren Auslöser vor dem Merge lag, haben ihr Ergebnis verloren.**
 Am 30.8.2026 auf `swiss-efv-mcp#68`: «ready for review» um 08:13:31, Merge um
 08:13:34, und der dadurch ausgelöste Lauf startete um 08:13:35 — eine Sekunde
 *nach* dem Merge. Beim Merge lief also gar nichts; der Lauf war erst ausgelöst.
@@ -383,15 +382,25 @@ mehr». Das ist zu weit gegriffen. Am 30.8.2026 wiederholte sich der Fall auf
 `#69` — Merge um 09:56:04, `✅ Completed` auf `85658be` um 09:57:17, kein
 Ergebnis —, und ein *danach* um 11:42:47 von Hand angestossener Lauf postete um
 11:44:33 ein ganz gewöhnliches Review-Objekt, mit Befund, auf demselben
-geschlossenen PR. Was die beiden Fälle trennt, ist also weder der Zustand des
-PR beim Posten noch, ob beim Merge ein Lauf lief — auf `#68` lief keiner. Es ist
-der **Auslöser**: Lag er vor dem Merge, entfällt das Ergebnis; lag er danach,
-kommt es.
+geschlossenen PR.
 
-Der Unterschied ist keine Wortklauberei, er ändert die Vorsichtsmassnahme. Wer
-abwartet, bis ein Lauf *sichtbar startet*, und dann mergt, ist nicht geschützt:
-`#68` ist genau der Fall, in dem beim Merge noch nichts zu sehen war und das
-Ergebnis trotzdem verfiel. Abzuwarten ist das Ergebnis, nicht der Start.
+Sicher ausgeschlossen ist damit zweierlei: der Zustand des PR beim Posten (beide
+Male geschlossen, einmal kam das Ergebnis) und die Frage, ob beim Merge ein Lauf
+lief — auf `#68` lief keiner, er war erst ausgelöst.
+
+**Was übrig bleibt, ist nicht isoliert.** Die beiden verlorenen Ergebnisse
+stammen aus *automatisch* ausgelösten Läufen, deren Auslöser vor dem Merge lag;
+das gelungene aus einem *von Hand* angeforderten danach. Zeitpunkt und
+Auslöseweg unterscheiden sich zugleich, und drei Beobachtungen trennen sie
+nicht. Belegt ist: **Ein von Hand nach dem Merge angeforderter Lauf postet.**
+Die allgemeinere Regel «vorher entfällt, nachher kommt es» ist eine Vermutung,
+und sie steht hier als solche.
+
+Die Vorsichtsmassnahme hängt daran ohnehin nicht, und sie ist der Grund, warum
+der Unterschied keine Wortklauberei ist. Wer abwartet, bis ein Lauf *sichtbar
+startet*, und dann mergt, ist nicht geschützt: `#68` ist genau der Fall, in dem
+beim Merge noch nichts zu sehen war und das Ergebnis trotzdem verfiel.
+Abzuwarten ist das Ergebnis, nicht der Start.
 
 Praktisch ist das die gute Nachricht des Abschnitts: Der Ersatz, den er unten
 empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft, und der
