@@ -263,11 +263,16 @@ ohne dass jemand hineingesehen hat, und am 22.8. noch einmal 43.
   ready stellt — und damit das Gegenmittel zu den Sekunden zwischen «ready» und
   Merge weiter unten.
 - **Das Kontingent ist weg** — dann schreibt er die Meldung oben.
-- **Für das Repo fehlt eine Environment** — dann schreibt er:
+- **Codex meldet eine fehlende Environment** — dann schreibt er:
 
   ```
   To use Codex here, create an environment for this repo.
   ```
+
+  «Meldet», nicht «fehlt»: Der Text ist keine verlässliche Auskunft über die
+  Konfiguration — am 29.8.2026 stand er in einem Repo, das eine hatte, und war
+  eine Minute später weg. Erst wiederholen, dann konfigurieren; die Messung
+  steht unten im Abschnitt über die Environment.
 - **Es lief gar kein Auslöser** — und ein Push ist keiner. Codex zählt sie
   selbst im Infokasten auf: einen PR zum Review öffnen, einen Draft auf ready
   stellen, «@codex review» kommentieren. Wer einen Befund behebt und pusht,
@@ -281,6 +286,12 @@ und PR #56 am 23.8. um 08:22:20 die Environment-Meldung. Läge die
 Environment-Prüfung vorn, hätte #54 sie schon am Vortag gesehen; die Environment
 fehlte ja bereits. Zwei Meldungen aus demselben Repo schlagen hier jede
 Vermutung über die Reihenfolge.
+
+Diese Ableitung hat eine Voraussetzung, die seit dem 29.8.2026 nicht mehr
+sicher ist: dass die Environment am 22.8. schon fehlte. Geschlossen wurde das
+aus der Meldung vom 23.8. — und die Meldung ist, wie unten gemessen, kein
+verlässlicher Beleg für eine fehlende Environment. Die Reihenfolge kann
+weiterhin stimmen; ihr Beweis steht auf einer Annahme, die niemand geprüft hat.
 
 Praktisch heisst das: **Eine verschwundene Limit-Meldung ist keine Entwarnung.**
 Sie kann bedeuten, dass das Kontingent wieder da ist — und dass jetzt etwas
@@ -438,11 +449,38 @@ das ein bekannter Fehler bei mehreren verbundenen Konten — dann den
 GitHub-Connector in den Codex-Einstellungen trennen und neu verbinden.
 
 Die Environment legt man unter `chatgpt.com/codex/cloud/settings/environments`
-an, und zwar **je Repo**. Die Meldung sagt es selbst («for this repo»), und am
-23.8. war es genau so: In `swiss-public-data-mcp` fehlte sie, dort kam kein
-Review; in den übrigen Repos lief Codex am selben Morgen durch. Eine
-Environment fürs Konto genügt also nicht — wer eine anlegt und den Rest für
-erledigt hält, mergt weiter Ungeprüftes.
+an, und zwar **je Repo**. Am 23.8. sah es genau danach aus: In
+`swiss-public-data-mcp` kam kein Review, in den übrigen Repos lief Codex am
+selben Morgen durch. Eine Environment fürs Konto genügt also nicht — wer eine
+anlegt und den Rest für erledigt hält, mergt weiter Ungeprüftes.
+
+**Die Meldung selbst ist aber kein Beleg dafür, dass eine fehlt.** Am
+29.8.2026 auf `swiss-efv-mcp#66`:
+
+| Zeit (UTC) | Ereignis |
+|---|---|
+| 16:56, 17:01, 17:05 | drei Codex-Reviews in diesem Repo, alle durchgelaufen |
+| 18:38:34 | «To use Codex here, create an environment for this repo» |
+| 18:39:34 | nach «@codex review»: Lauf startet normal, auf demselben Commit |
+| 18:44:28 | befundlos fertig |
+
+Sechzig Sekunden zwischen der Meldung und einem gelungenen Lauf, dasselbe Repo,
+derselbe Commit, an den Einstellungen nichts geändert. Der Text behauptet eine
+Konfigurationslücke; belegt ist nur, dass kein Lauf zustande kam.
+
+Das ist dieselbe Klasse wie der 403 weiter oben — eine Störung, als Auskunft
+verpackt —, aber mit der **umgekehrten** Handlungsanweisung als beim 400er:
+
+- Beim 400er war die Absage deterministisch und wiederholbar; ein
+  Wiederholungsrat wäre dort falsch gewesen, gesucht werden musste der fehlende
+  Parameter.
+- Hier trennt genau ein Wiederholungslauf «stabil» von «Aussetzer», und er
+  kostet nichts. **Erst wiederholen, dann konfigurieren.** Wer der Meldung
+  sofort folgt, legt eine Environment an, die es schon gibt, und hält das
+  Problem danach für gelöst.
+
+Wiederholt sich die Meldung, ist sie stabil — dann gilt der Absatz darüber und
+die Environment fehlt wirklich.
 
 ---
 
