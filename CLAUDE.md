@@ -345,7 +345,8 @@ Zwei Anker, in dieser Reihenfolge:
 
 1. **Der Statusbericht.** Seine Zeile `✅ Completed` nennt den geprüften Commit
    und ist das einzige Objekt, das beide Ausgänge gleich behandelt. Stimmt der
-   Commit mit dem Head, ist der Head geprüft.
+   Commit mit dem Head, ist der Head geprüft — geprüft, nicht notwendig sauber:
+   Den Ausgang nennt der Bericht nicht.
 2. **Fehlt der Bericht**, trägt jedes Codex-Ergebnis seinen Commit selbst — das
    Review-Objekt wie die Befundlos-Meldung, beide als «Reviewed commit». Dann
    das **jüngste** von beiden nehmen und dessen Commit vergleichen; das ältere
@@ -354,9 +355,45 @@ Zwei Anker, in dieser Reihenfolge:
 Was in keinem Fall trägt: die blosse Anwesenheit eines Review-Objekts oder
 einer Befundlos-Meldung, ohne den Commit darin zu lesen.
 
+**Wird der PR während des Laufs gemergt, entfällt das Ergebnis.** Am 30.8.2026
+auf `swiss-efv-mcp#68`: «ready for review» um 08:13:31, Merge um 08:13:34, und
+der dadurch ausgelöste Lauf startete um 08:13:35 — eine Sekunde *nach* dem
+Merge. Um 08:14:41 stand `✅ Completed` auf `34021a9`. Ein Review-Objekt gibt
+es nicht, eine Befundlos-Meldung auch nicht: Auf einem geschlossenen PR postet
+Codex sie nicht mehr.
+
+Übrig bleibt der Statusbericht. Er nennt den geprüften Commit — der Head wurde
+also geprüft —, sagt aber nichts über den Ausgang. **Der Ausgang ist in diesem
+Fall von aussen nicht feststellbar.**
+
+Naheliegend wäre, ihn aus der 👍-Reaktion am PR zu lesen. Das trägt nicht:
+
+- Das Feld `reactions` aus `issue_read` ist eine **Summe ohne Urheber**. Ein
+  Mensch, der die PR-Beschreibung mit 👍 quittiert, erzeugt dasselbe `+1: 1`.
+  Zusammen mit `✅ Completed` liesse sich daraus «sauber» ableiten, auch wenn
+  Codex einen Befund hatte, der nach dem Merge nicht mehr gepostet wurde.
+- Den Urheber nachzuschlagen geht aus den Agent-Sessions nicht: Der
+  REST-Endpunkt `/issues/{n}/reactions` ist dort gesperrt, und kein
+  MCP-Werkzeug liefert ihn.
+
+Auf `#68` war die Reaktion trotzdem eindeutig — aber nur, weil ausser Codex
+niemand den PR angefasst hatte. Das ist ein Sonderfall, keine Regel.
+
+**Der Ausgang jenes Laufs bleibt dauerhaft unbekannt.** Ein neuer Lauf holt ihn
+nicht zurück, er fällt ein eigenes, unabhängiges Urteil — dasselbe Argument wie
+weiter unten, wo derselbe Text in 42 Läufen 36-mal einen Befund und 6-mal keinen
+bekam. Was bleibt, ist ein Ersatz, keine Rekonstruktion: eine frische Prüfung
+auf dem Merge-Commit oder in einem Folge-PR, deren Ergebnis für sich steht.
+
+Ein Statusbericht ohne Ergebnis heisst also «geprüft, Ausgang unbekannt» — und
+das ist eine ehrlichere Auskunft als eine Summe, die zwei Urheber nicht trennt.
+
 Das sind verschiedene Abfragen — `get_reviews` fürs Objekt, `get_comments` für
-alles andere; wer nur eine nimmt, übersieht den Rest. Genau so ist die
-Limit-Meldung zuerst durchgerutscht.
+die Kommentare; wer nur eine nimmt, übersieht den Rest. Genau so ist die
+Limit-Meldung zuerst durchgerutscht. «Alles andere» deckt `get_comments` aber
+nicht ab: Die Reaktion am PR liegt in keiner der beiden — sie steht im Feld
+`reactions` von `issue_read`, und weil das eine Summe ohne Urheber ist, taugt
+sie ohnehin nicht als Beleg (oben, und weiter unten ausführlicher).
 
 Der Kommentarzähler allein reicht ohnehin nicht: `comments: 1` kann die
 Befundlos-, die Kontingent- **oder** die Environment-Meldung sein — und seit dem
@@ -412,6 +449,11 @@ jeweils den aktuellen Head nennt. Die Reaktion taugt dafür nicht — und der
 Grund ist genau der Commit: Sie nennt keinen und wird beim nächsten Lauf
 überschrieben. Sie sagt «gerade läuft etwas» oder «der letzte Lauf war sauber»,
 nie «dieser Head ist geprüft».
+
+Das gilt auch im Merge-während-des-Laufs-Fall oben, wo sie als einzige Quelle
+für den Ausgang übrig zu bleiben scheint: Die Summe im Feld `reactions` trennt
+Codex nicht von einem Menschen, und den Urheber liefert hier kein Werkzeug.
+Was dort fehlt, holt man mit einem neuen Lauf, nicht mit einer Reaktion.
 
 Und ein befundloser Lauf ist kein Freispruch. Am 23.8. lief derselbe Text durch
 42 Reviews: 36 meldeten denselben P2-Befund, 6 die Befundlos-Meldung — gleiche
