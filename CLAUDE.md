@@ -409,8 +409,7 @@ gemergten Branches.
 
 Übrig bleibt der Statusbericht. Er nennt den geprüften Commit — der Head wurde
 also geprüft —, sagt aber nichts über den Ausgang. **Der Ausgang ist in diesem
-Fall zunächst nicht feststellbar** — die eine Ausnahme steht unten, und sie ist
-keine, auf die man bauen kann.
+Fall von aussen nicht feststellbar.**
 
 Naheliegend wäre, ihn aus der 👍-Reaktion am PR zu lesen. Das trägt nicht:
 
@@ -425,29 +424,11 @@ Naheliegend wäre, ihn aus der 👍-Reaktion am PR zu lesen. Das trägt nicht:
 Auf `#68` war die Reaktion trotzdem eindeutig — aber nur, weil ausser Codex
 niemand den PR angefasst hatte. Das ist ein Sonderfall, keine Regel.
 
-**Der Ausgang des Laufs auf `#68` bleibt damit unbekannt.** Ein neuer Lauf holt
-ihn nicht zurück, er fällt ein eigenes, unabhängiges Urteil — dasselbe Argument wie
+**Der Ausgang des Laufs auf `#68` bleibt dauerhaft unbekannt.** Ein neuer Lauf
+holt ihn nicht zurück, er fällt ein eigenes, unabhängiges Urteil — dasselbe Argument wie
 weiter unten, wo derselbe Text in 42 Läufen 36-mal einen Befund und 6-mal keinen
 bekam. Was bleibt, ist ein Ersatz, keine Rekonstruktion: eine frische Prüfung
 auf dem Merge-Commit oder in einem Folge-PR, deren Ergebnis für sich steht.
-
-**Es sei denn, die Urheberschaft räumt sich selbst auf.** Auf `#69` fiel derselbe
-Merge-vor-dem-Ergebnis-Fall an — Merge 09:56:04, `✅ Completed` auf `85658be`
-um 09:57:17, kein Ergebnis —, und dort ist der Ausgang doch herausgekommen. Um
-11:42:47 stand am PR ein `+1: 1`; der von Hand angestossene Lauf endete um
-11:44:33 mit einem Befund, und um 11:44:39 war die Summe `0`. Wegnehmen kann eine
-Reaktion nur, wer sie gesetzt hat — das 👍 war also Codex', und damit war der
-Lauf vom 09:57 auf `85658be` befundlos.
-
-Das ist kein Verfahren, sondern ein Glücksfall, an zwei Stellen. Es trägt nur,
-wenn ein *späterer* Lauf einen Befund hat, denn nur der räumt die Reaktion weg;
-wäre er sauber gewesen, stünde hinterher dasselbe `+1: 1` da wie vorher und
-hätte nichts gesagt. Und es setzt voraus, dass zwischen 08:36 — dort räumte ein
-Befund die Reaktion — und 11:42 niemand von Hand ein 👍 gesetzt hat; in dieser
-Spanne wurde nicht gemessen.
-
-Die Regel bleibt deshalb, wie sie ist: Wer den Ausgang braucht, prüft neu,
-statt auf einen Befund zu warten, der ihm nebenbei die Urheberschaft verrät.
 
 Ein Statusbericht ohne Ergebnis heisst also «geprüft, Ausgang unbekannt» — und
 das ist eine ehrlichere Auskunft als eine Summe, die zwei Urheber nicht trennt.
@@ -527,9 +508,7 @@ nie «dieser Head ist geprüft».
 
 Das gilt auch im Merge-vor-dem-Ergebnis-Fall oben, wo sie als einzige Quelle
 für den Ausgang übrig zu bleiben scheint: Die Summe im Feld `reactions` trennt
-Codex nicht von einem Menschen, und den Urheber liefert hier kein Werkzeug —
-ausser dem Glücksfall dort oben, in dem ein späterer Befund die Reaktion wegräumt
-und sie damit rückwirkend zuordnet.
+Codex nicht von einem Menschen, und den Urheber liefert hier kein Werkzeug.
 Was dort fehlt, ersetzt ein neuer Lauf — er fällt ein eigenes Urteil, er holt
 das alte nicht zurück. Eine Reaktion liefert es erst recht nicht.
 
