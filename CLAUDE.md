@@ -572,9 +572,11 @@ Konfigurationslücke; belegt ist nur, dass kein Lauf zustande kam.
 `swiss-efv-mcp#70` folgte auf **einen einzigen** «@codex review» erst um
 11:51:56 die Meldung und dann um 11:52:04 der Start eines gewöhnlichen Laufs,
 Auslöser «Manual request», acht Sekunden später, ohne dass jemand etwas tat.
-Der Lauf endete um 11:54:08 mit einem Befund. Die Meldung war hier also nicht
-einmal ein verlorener Lauf, sondern eine Zwischenmeldung des Laufs, der ohnehin
-kam.
+Der Lauf endete um 11:54:08 mit einem Befund. Die Meldung stand hier also acht
+Sekunden vor einem gelungenen Lauf desselben Auslösers — ob sie zu ihm gehörte,
+ist von aussen nicht zu sehen. Zwei getrennte Verarbeitungen desselben
+Auslösers, eine scheiternd und eine erfolgreich, passen genauso zur
+Beobachtung.
 
 Das ist dieselbe Klasse wie der 403 weiter oben — eine Störung, als Auskunft
 verpackt —, aber mit der **umgekehrten** Handlungsanweisung als beim 400er:
@@ -584,8 +586,8 @@ verpackt —, aber mit der **umgekehrten** Handlungsanweisung als beim 400er:
   Parameter.
 - Hier trennt genau ein Wiederholungslauf «stabil» von «Aussetzer», und er
   kostet nichts. **Erst abwarten, dann wiederholen, dann konfigurieren** — das
-  Abwarten steht seit `#70` vorn, weil der Lauf dort ganz von selbst kam. Wer der Meldung
-  sofort folgt, legt eine Environment an, die es schon gibt, und hält das
+  Abwarten steht seit `#70` vorn, weil der Lauf dort ganz von selbst kam. Wer
+  der Meldung sofort folgt, legt eine Environment an, die es schon gibt, und hält das
   Problem danach für gelöst.
 
 Wiederholt sich die Meldung, ist sie stabil — dann gilt der Absatz darüber und
