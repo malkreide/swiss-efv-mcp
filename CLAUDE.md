@@ -379,10 +379,14 @@ Naheliegend wäre, ihn aus der 👍-Reaktion am PR zu lesen. Das trägt nicht:
 Auf `#68` war die Reaktion trotzdem eindeutig — aber nur, weil ausser Codex
 niemand den PR angefasst hatte. Das ist ein Sonderfall, keine Regel.
 
-**Wer den Ausgang braucht, holt ihn, statt ihn zu erschliessen:** einen neuen
-Lauf auf dem Merge-Commit anstossen, oder die Frage in einem Folge-PR stellen.
-Ein Statusbericht ohne Ergebnis heisst «geprüft, Ausgang unbekannt» — und das
-ist eine ehrlichere Auskunft als eine Summe, die zwei Urheber nicht trennt.
+**Der Ausgang jenes Laufs bleibt dauerhaft unbekannt.** Ein neuer Lauf holt ihn
+nicht zurück, er fällt ein eigenes, unabhängiges Urteil — dasselbe Argument wie
+weiter unten, wo derselbe Text in 42 Läufen 36-mal einen Befund und 6-mal keinen
+bekam. Was bleibt, ist ein Ersatz, keine Rekonstruktion: eine frische Prüfung
+auf dem Merge-Commit oder in einem Folge-PR, deren Ergebnis für sich steht.
+
+Ein Statusbericht ohne Ergebnis heisst also «geprüft, Ausgang unbekannt» — und
+das ist eine ehrlichere Auskunft als eine Summe, die zwei Urheber nicht trennt.
 
 Das sind verschiedene Abfragen — `get_reviews` fürs Objekt, `get_comments` für
 die Kommentare; wer nur eine nimmt, übersieht den Rest. Genau so ist die
