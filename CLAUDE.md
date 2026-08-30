@@ -308,7 +308,21 @@ den dieser Abschnitt verhindern soll, nur in die andere Richtung.
 sich an der Form: Ein Review **mit** Befund ist ein Review-Objekt
 («💡 Codex Review», mit Commit-Angabe); ein Review **ohne** Befund und die
 beiden Ausfallmeldungen — Kontingent wie Environment — sind gewöhnliche
-Issue-Kommentare und trennen sich nur im Text. Beim Draft greift ohne
+Issue-Kommentare und trennen sich nur im Text.
+
+**Die Form trägt für die Ausfallmeldungen aber nicht.** Am 30.8.2026 stand die
+Environment-Meldung auf `swiss-efv-mcp#70` als **Review-Kommentar in einem
+Thread**, acht Sekunden nach einer Antwort in genau diesem Thread — nicht als
+Issue-Kommentar. Wer die Ausfallmeldungen nur unter den PR-Kommentaren sucht,
+übersieht sie dort. Für Review-Objekt und Befundlos-Meldung gilt die
+Unterscheidung weiter; für die beiden Ausfälle ist sie nur ein Ort von
+mehreren.
+
+(Ob die Thread-Antwort selbst ein Auslöser ist, gibt die Messung nicht her —
+belegt ist nur, dass die Meldung acht Sekunden danach kam. Der Infokasten
+zählt sie nicht auf.)
+
+Beim Draft greift ohne
 manuellen Anstoss kein Auslöser, dort steht dann überhaupt nichts; ein
 kommentarloser Draft ist deshalb kein Beleg, sondern ein nicht durchgeführter
 Test. Ein von Hand angestossener Lauf hinterlässt dagegen auch auf einem Draft
@@ -430,11 +444,14 @@ Ein Statusbericht ohne Ergebnis heisst also «geprüft, Ausgang unbekannt» — 
 das ist eine ehrlichere Auskunft als eine Summe, die zwei Urheber nicht trennt.
 
 Das sind verschiedene Abfragen — `get_reviews` fürs Objekt, `get_comments` für
-die Kommentare; wer nur eine nimmt, übersieht den Rest. Genau so ist die
-Limit-Meldung zuerst durchgerutscht. «Alles andere» deckt `get_comments` aber
-nicht ab: Die Reaktion am PR liegt in keiner der beiden — sie steht im Feld
-`reactions` von `issue_read`, und weil das eine Summe ohne Urheber ist, taugt
-sie ohnehin nicht als Beleg (oben, und weiter unten ausführlicher).
+die PR-Kommentare, `get_review_comments` für die Threads; wer nur eine nimmt,
+übersieht den Rest. Genau so ist die Limit-Meldung zuerst durchgerutscht, und
+die dritte steht hier seit dem 30.8.2026, weil die Environment-Meldung auf `#70`
+in einem Thread lag und `get_comments` sie nicht zeigte. «Alles andere» deckt
+`get_comments` ohnehin nicht ab: Die Reaktion am PR liegt in keiner der drei —
+sie steht im Feld `reactions` von `issue_read`, und weil das eine Summe ohne
+Urheber ist, taugt sie ohnehin nicht als Beleg (oben, und weiter unten
+ausführlicher).
 
 Der Kommentarzähler allein reicht ohnehin nicht: `comments: 1` kann die
 Befundlos-, die Kontingent- **oder** die Environment-Meldung sein — und seit dem
