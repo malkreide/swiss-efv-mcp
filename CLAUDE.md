@@ -345,7 +345,8 @@ Zwei Anker, in dieser Reihenfolge:
 
 1. **Der Statusbericht.** Seine Zeile `✅ Completed` nennt den geprüften Commit
    und ist das einzige Objekt, das beide Ausgänge gleich behandelt. Stimmt der
-   Commit mit dem Head, ist der Head geprüft.
+   Commit mit dem Head, ist der Head geprüft — geprüft, nicht notwendig sauber:
+   Den Ausgang nennt der Bericht nicht.
 2. **Fehlt der Bericht**, trägt jedes Codex-Ergebnis seinen Commit selbst — das
    Review-Objekt wie die Befundlos-Meldung, beide als «Reviewed commit». Dann
    das **jüngste** von beiden nehmen und dessen Commit vergleichen; das ältere
@@ -353,6 +354,24 @@ Zwei Anker, in dieser Reihenfolge:
 
 Was in keinem Fall trägt: die blosse Anwesenheit eines Review-Objekts oder
 einer Befundlos-Meldung, ohne den Commit darin zu lesen.
+
+**Wird der PR während des Laufs gemergt, entfällt das Ergebnis.** Am 30.8.2026
+auf `swiss-efv-mcp#68`: «ready for review» um 08:13:31, Merge um 08:13:34, und
+der dadurch ausgelöste Lauf startete um 08:13:35 — eine Sekunde *nach* dem
+Merge. Um 08:14:41 stand `✅ Completed` auf `34021a9`. Ein Review-Objekt gibt
+es nicht, eine Befundlos-Meldung auch nicht: Auf einem geschlossenen PR postet
+Codex sie nicht mehr.
+
+Übrig bleiben zwei Teilaussagen, die einzeln nichts belegen und zusammen alles:
+
+- Der **Statusbericht** nennt den geprüften Commit, sagt aber nichts über den
+  Ausgang.
+- Die **Reaktion am PR** sagt den Ausgang — 👍 heisst «ohne Befund» —, nennt
+  aber keinen Commit.
+
+Erst beide zusammen ergeben «`34021a9` wurde geprüft und war sauber». Das ist
+der einzige Fall, in dem die Reaktion etwas beiträgt. Sie ersetzt den Beleg
+nicht; sie liefert die Hälfte, die dem Bericht fehlt.
 
 Das sind verschiedene Abfragen — `get_reviews` fürs Objekt, `get_comments` für
 alles andere; wer nur eine nimmt, übersieht den Rest. Genau so ist die
@@ -412,6 +431,11 @@ jeweils den aktuellen Head nennt. Die Reaktion taugt dafür nicht — und der
 Grund ist genau der Commit: Sie nennt keinen und wird beim nächsten Lauf
 überschrieben. Sie sagt «gerade läuft etwas» oder «der letzte Lauf war sauber»,
 nie «dieser Head ist geprüft».
+
+Genau deshalb ist sie im Merge-während-des-Laufs-Fall oben brauchbar und sonst
+nirgends: Dort liefert der Statusbericht den Commit, den ihr fehlt, und sie
+liefert den Ausgang, den er nicht nennt. Wo beide Hälften einzeln zu haben
+sind, braucht es sie nicht.
 
 Und ein befundloser Lauf ist kein Freispruch. Am 23.8. lief derselbe Text durch
 42 Reviews: 36 meldeten denselben P2-Befund, 6 die Befundlos-Meldung — gleiche
