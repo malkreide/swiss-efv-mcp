@@ -397,10 +397,11 @@ Die allgemeinere Regel «vorher entfällt, nachher kommt es» ist eine Vermutung
 und sie steht hier als solche.
 
 Die Vorsichtsmassnahme hängt daran ohnehin nicht, und sie ist der Grund, warum
-der Unterschied keine Wortklauberei ist. Wer abwartet, bis ein Lauf *sichtbar
-startet*, und dann mergt, ist nicht geschützt: `#68` ist genau der Fall, in dem
-beim Merge noch nichts zu sehen war und das Ergebnis trotzdem verfiel.
-Abzuwarten ist das Ergebnis, nicht der Start.
+der Unterschied keine Wortklauberei ist. Auf `#68` war beim Merge **kein Lauf zu
+sehen** — ausgelöst war er, gestartet nicht —, und sein Ergebnis verfiel
+trotzdem. «Es läuft noch nichts» ist also kein sicheres Zeichen. Ob ein Merge
+*nach* einem sichtbaren Start das Ergebnis rettet, ist nicht gemessen; wer
+sichergehen will, wartet nicht auf den Start, sondern auf das Ergebnis.
 
 Praktisch ist das die gute Nachricht des Abschnitts: Der Ersatz, den er unten
 empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft, und der
