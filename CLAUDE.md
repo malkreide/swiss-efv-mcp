@@ -362,25 +362,34 @@ Merge. Um 08:14:41 stand `✅ Completed` auf `34021a9`. Ein Review-Objekt gibt
 es nicht, eine Befundlos-Meldung auch nicht: Auf einem geschlossenen PR postet
 Codex sie nicht mehr.
 
-Übrig bleiben zwei Teilaussagen, die einzeln nichts belegen und zusammen alles:
+Übrig bleibt der Statusbericht. Er nennt den geprüften Commit — der Head wurde
+also geprüft —, sagt aber nichts über den Ausgang. **Der Ausgang ist in diesem
+Fall von aussen nicht feststellbar.**
 
-- Der **Statusbericht** nennt den geprüften Commit, sagt aber nichts über den
-  Ausgang.
-- Die **Reaktion am PR** sagt den Ausgang — 👍 heisst «ohne Befund» —, nennt
-  aber keinen Commit. Sie braucht eine **eigene Abfrage**: `issue_read` mit
-  Methode `get` auf die PR-Nummer, dort das Feld `reactions`. Weder
-  `get_reviews` noch `get_comments` liefert sie; an den Kommentaren sitzt
-  ohnehin nie eine (siehe unten).
+Naheliegend wäre, ihn aus der 👍-Reaktion am PR zu lesen. Das trägt nicht:
 
-Erst beide zusammen ergeben «`34021a9` wurde geprüft und war sauber». Das ist
-der einzige Fall, in dem die Reaktion etwas beiträgt. Sie ersetzt den Beleg
-nicht; sie liefert die Hälfte, die dem Bericht fehlt.
+- Das Feld `reactions` aus `issue_read` ist eine **Summe ohne Urheber**. Ein
+  Mensch, der die PR-Beschreibung mit 👍 quittiert, erzeugt dasselbe `+1: 1`.
+  Zusammen mit `✅ Completed` liesse sich daraus «sauber» ableiten, auch wenn
+  Codex einen Befund hatte, der nach dem Merge nicht mehr gepostet wurde.
+- Den Urheber nachzuschlagen geht aus den Agent-Sessions nicht: Der
+  REST-Endpunkt `/issues/{n}/reactions` ist dort gesperrt, und kein
+  MCP-Werkzeug liefert ihn.
+
+Auf `#68` war die Reaktion trotzdem eindeutig — aber nur, weil ausser Codex
+niemand den PR angefasst hatte. Das ist ein Sonderfall, keine Regel.
+
+**Wer den Ausgang braucht, holt ihn, statt ihn zu erschliessen:** einen neuen
+Lauf auf dem Merge-Commit anstossen, oder die Frage in einem Folge-PR stellen.
+Ein Statusbericht ohne Ergebnis heisst «geprüft, Ausgang unbekannt» — und das
+ist eine ehrlichere Auskunft als eine Summe, die zwei Urheber nicht trennt.
 
 Das sind verschiedene Abfragen — `get_reviews` fürs Objekt, `get_comments` für
 die Kommentare; wer nur eine nimmt, übersieht den Rest. Genau so ist die
 Limit-Meldung zuerst durchgerutscht. «Alles andere» deckt `get_comments` aber
-nicht ab: Die Reaktion am PR liegt in keiner der beiden und braucht die dritte
-Abfrage von oben.
+nicht ab: Die Reaktion am PR liegt in keiner der beiden — sie steht im Feld
+`reactions` von `issue_read`, und weil das eine Summe ohne Urheber ist, taugt
+sie ohnehin nicht als Beleg (oben, und weiter unten ausführlicher).
 
 Der Kommentarzähler allein reicht ohnehin nicht: `comments: 1` kann die
 Befundlos-, die Kontingent- **oder** die Environment-Meldung sein — und seit dem
@@ -437,10 +446,10 @@ Grund ist genau der Commit: Sie nennt keinen und wird beim nächsten Lauf
 überschrieben. Sie sagt «gerade läuft etwas» oder «der letzte Lauf war sauber»,
 nie «dieser Head ist geprüft».
 
-Genau deshalb ist sie im Merge-während-des-Laufs-Fall oben brauchbar und sonst
-nirgends: Dort liefert der Statusbericht den Commit, den ihr fehlt, und sie
-liefert den Ausgang, den er nicht nennt. Wo beide Hälften einzeln zu haben
-sind, braucht es sie nicht.
+Das gilt auch im Merge-während-des-Laufs-Fall oben, wo sie als einzige Quelle
+für den Ausgang übrig zu bleiben scheint: Die Summe im Feld `reactions` trennt
+Codex nicht von einem Menschen, und den Urheber liefert hier kein Werkzeug.
+Was dort fehlt, holt man mit einem neuen Lauf, nicht mit einer Reaktion.
 
 Und ein befundloser Lauf ist kein Freispruch. Am 23.8. lief derselbe Text durch
 42 Reviews: 36 meldeten denselben P2-Befund, 6 die Befundlos-Meldung — gleiche
