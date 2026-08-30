@@ -359,12 +359,25 @@ einer Befundlos-Meldung, ohne den Commit darin zu lesen.
 auf `swiss-efv-mcp#68`: «ready for review» um 08:13:31, Merge um 08:13:34, und
 der dadurch ausgelöste Lauf startete um 08:13:35 — eine Sekunde *nach* dem
 Merge. Um 08:14:41 stand `✅ Completed` auf `34021a9`. Ein Review-Objekt gibt
-es nicht, eine Befundlos-Meldung auch nicht: Auf einem geschlossenen PR postet
-Codex sie nicht mehr.
+es nicht, eine Befundlos-Meldung auch nicht.
+
+Als Grund stand hier zuerst «auf einem geschlossenen PR postet Codex sie nicht
+mehr». Das ist zu weit gegriffen. Am 30.8.2026 wiederholte sich der Fall auf
+`#69` — Merge um 09:56:04, `✅ Completed` auf `85658be` um 09:57:17, kein
+Ergebnis —, und ein *danach* um 11:42:47 von Hand angestossener Lauf postete um
+11:44:33 ein ganz gewöhnliches Review-Objekt, mit Befund, auf demselben
+geschlossenen PR. Was die beiden Fälle trennt, ist also nicht der Zustand des
+PR beim Posten, sondern ob der Lauf beim Merge schon lief.
+
+Praktisch ist das die gute Nachricht des Abschnitts: Der Ersatz, den er unten
+empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft, und der
+geprüfte Commit ist dann der **Merge-Commit** (`21a3224`), nicht der Head des
+gemergten Branches.
 
 Übrig bleibt der Statusbericht. Er nennt den geprüften Commit — der Head wurde
 also geprüft —, sagt aber nichts über den Ausgang. **Der Ausgang ist in diesem
-Fall von aussen nicht feststellbar.**
+Fall zunächst nicht feststellbar** — die eine Ausnahme steht unten, und sie ist
+keine, auf die man bauen kann.
 
 Naheliegend wäre, ihn aus der 👍-Reaktion am PR zu lesen. Das trägt nicht:
 
@@ -379,11 +392,29 @@ Naheliegend wäre, ihn aus der 👍-Reaktion am PR zu lesen. Das trägt nicht:
 Auf `#68` war die Reaktion trotzdem eindeutig — aber nur, weil ausser Codex
 niemand den PR angefasst hatte. Das ist ein Sonderfall, keine Regel.
 
-**Der Ausgang jenes Laufs bleibt dauerhaft unbekannt.** Ein neuer Lauf holt ihn
-nicht zurück, er fällt ein eigenes, unabhängiges Urteil — dasselbe Argument wie
+**Der Ausgang des Laufs auf `#68` bleibt damit unbekannt.** Ein neuer Lauf holt
+ihn nicht zurück, er fällt ein eigenes, unabhängiges Urteil — dasselbe Argument wie
 weiter unten, wo derselbe Text in 42 Läufen 36-mal einen Befund und 6-mal keinen
 bekam. Was bleibt, ist ein Ersatz, keine Rekonstruktion: eine frische Prüfung
 auf dem Merge-Commit oder in einem Folge-PR, deren Ergebnis für sich steht.
+
+**Es sei denn, die Urheberschaft räumt sich selbst auf.** Auf `#69` fiel derselbe
+Merge-während-des-Laufs-Fall an — Merge 09:56:04, `✅ Completed` auf `85658be`
+um 09:57:17, kein Ergebnis —, und dort ist der Ausgang doch herausgekommen. Um
+11:42:47 stand am PR ein `+1: 1`; der von Hand angestossene Lauf endete um
+11:44:33 mit einem Befund, und um 11:44:39 war die Summe `0`. Wegnehmen kann eine
+Reaktion nur, wer sie gesetzt hat — das 👍 war also Codex', und damit war der
+Lauf vom 09:57 auf `85658be` befundlos.
+
+Das ist kein Verfahren, sondern ein Glücksfall, an zwei Stellen. Es trägt nur,
+wenn ein *späterer* Lauf einen Befund hat, denn nur der räumt die Reaktion weg;
+wäre er sauber gewesen, stünde hinterher dasselbe `+1: 1` da wie vorher und
+hätte nichts gesagt. Und es setzt voraus, dass zwischen 08:36 — dort räumte ein
+Befund die Reaktion — und 11:42 niemand von Hand ein 👍 gesetzt hat; in dieser
+Spanne wurde nicht gemessen.
+
+Die Regel bleibt deshalb, wie sie ist: Wer den Ausgang braucht, prüft neu,
+statt auf einen Befund zu warten, der ihm nebenbei die Urheberschaft verrät.
 
 Ein Statusbericht ohne Ergebnis heisst also «geprüft, Ausgang unbekannt» — und
 das ist eine ehrlichere Auskunft als eine Summe, die zwei Urheber nicht trennt.
@@ -425,9 +456,10 @@ fünfte Grund oben aufwirft.
 **Zur 👍-Reaktion: zwei Fassungen lang wurde am falschen Objekt gemessen.**
 Hier stand, der Infokasten sei keine Quelle — belegt mit sechs Repos am 23.8., in
 denen die Befundlos-Meldung kam «und in keinem die Reaktion». Gesucht wurde an
-den Kommentaren. Dort ist nie eine.
+den Kommentaren jener Läufe; dort war keine.
 
-Die Reaktion sitzt **am PR**. Am 29.8.2026 auf `swiss-efv-mcp#64` durchgemessen,
+Die Reaktion sitzt **am PR** — mit einer Einschränkung, die zwei Absätze weiter
+unten steht. Am 29.8.2026 auf `swiss-efv-mcp#64` durchgemessen,
 an einem PR, den ausser Codex niemand angefasst hatte:
 
 | Zeitpunkt | Zustand des Laufs | Reaktionen am PR |
@@ -443,6 +475,13 @@ review is running … reacts with 👍 once all reviews finish with no findings�
 Die alte Zeile war damit nicht vorsichtig, sondern **falsch**: Sie hat aus einer
 Messung am falschen Ort auf eine Lüge geschlossen. Der Kasten stimmt hier.
 
+**Ein fester Ort ist es trotzdem nicht.** Am 30.8.2026 setzte ein per
+«@codex review» angestossener Lauf sein 👀 auf **den auslösenden Kommentar**
+(`swiss-efv-mcp#69`, `eyes: 1` um 11:42:47), nicht auf den PR. Das 👍 dagegen
+sass auf `#62` nach einem ebenfalls per Kommentar angestossenen Lauf am PR und
+an keinem der drei Kommentare. Beide Orte abfragen; welcher trägt, hängt am
+Auslöser und am Ausgang, und keiner von beiden ist aus dem anderen zu erraten.
+
 Das ändert nichts an der Beweisregel, sondern nur an ihrer Begründung: Belegt
 ist eine Prüfung durch ein Review-Objekt oder eine Befundlos-Meldung, das
 jeweils den aktuellen Head nennt. Die Reaktion taugt dafür nicht — und der
@@ -452,8 +491,11 @@ nie «dieser Head ist geprüft».
 
 Das gilt auch im Merge-während-des-Laufs-Fall oben, wo sie als einzige Quelle
 für den Ausgang übrig zu bleiben scheint: Die Summe im Feld `reactions` trennt
-Codex nicht von einem Menschen, und den Urheber liefert hier kein Werkzeug.
-Was dort fehlt, holt man mit einem neuen Lauf, nicht mit einer Reaktion.
+Codex nicht von einem Menschen, und den Urheber liefert hier kein Werkzeug —
+ausser dem Glücksfall dort oben, in dem ein späterer Befund die Reaktion wegräumt
+und sie damit rückwirkend zuordnet.
+Was dort fehlt, ersetzt ein neuer Lauf — er fällt ein eigenes Urteil, er holt
+das alte nicht zurück. Eine Reaktion liefert es erst recht nicht.
 
 Und ein befundloser Lauf ist kein Freispruch. Am 23.8. lief derselbe Text durch
 42 Reviews: 36 meldeten denselben P2-Befund, 6 die Befundlos-Meldung — gleiche
