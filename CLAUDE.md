@@ -271,8 +271,10 @@ ohne dass jemand hineingesehen hat, und am 22.8. noch einmal 43.
 
   «Meldet», nicht «fehlt»: Der Text ist keine verlässliche Auskunft über die
   Konfiguration — am 29.8.2026 stand er in einem Repo, das eine hatte, und war
-  eine Minute später weg. Erst wiederholen, dann konfigurieren; die Messung
-  steht unten im Abschnitt über die Environment.
+  eine Minute später weg; am 30.8. kam acht Sekunden nach ihm der Lauf, den sie
+  für unmöglich erklärte, ohne zweiten Anstoss. Erst abwarten, dann
+  wiederholen, dann konfigurieren; beide Messungen stehen unten im Abschnitt
+  über die Environment.
 - **Es lief gar kein Auslöser** — und ein Push ist keiner. Codex zählt sie
   selbst im Infokasten auf: einen PR zum Review öffnen, einen Draft auf ready
   stellen, «@codex review» kommentieren. Wer einen Befund behebt und pusht,
@@ -355,19 +357,27 @@ Zwei Anker, in dieser Reihenfolge:
 Was in keinem Fall trägt: die blosse Anwesenheit eines Review-Objekts oder
 einer Befundlos-Meldung, ohne den Commit darin zu lesen.
 
-**Wird der PR während des Laufs gemergt, entfällt das Ergebnis.** Am 30.8.2026
-auf `swiss-efv-mcp#68`: «ready for review» um 08:13:31, Merge um 08:13:34, und
-der dadurch ausgelöste Lauf startete um 08:13:35 — eine Sekunde *nach* dem
-Merge. Um 08:14:41 stand `✅ Completed` auf `34021a9`. Ein Review-Objekt gibt
-es nicht, eine Befundlos-Meldung auch nicht.
+**Liegt der Auslöser vor dem Merge und das Ergebnis danach, entfällt es.**
+Am 30.8.2026 auf `swiss-efv-mcp#68`: «ready for review» um 08:13:31, Merge um
+08:13:34, und der dadurch ausgelöste Lauf startete um 08:13:35 — eine Sekunde
+*nach* dem Merge. Beim Merge lief also gar nichts; der Lauf war erst ausgelöst.
+Um 08:14:41 stand `✅ Completed` auf `34021a9`. Ein Review-Objekt gibt es
+nicht, eine Befundlos-Meldung auch nicht.
 
 Als Grund stand hier zuerst «auf einem geschlossenen PR postet Codex sie nicht
 mehr». Das ist zu weit gegriffen. Am 30.8.2026 wiederholte sich der Fall auf
 `#69` — Merge um 09:56:04, `✅ Completed` auf `85658be` um 09:57:17, kein
 Ergebnis —, und ein *danach* um 11:42:47 von Hand angestossener Lauf postete um
 11:44:33 ein ganz gewöhnliches Review-Objekt, mit Befund, auf demselben
-geschlossenen PR. Was die beiden Fälle trennt, ist also nicht der Zustand des
-PR beim Posten, sondern ob der Lauf beim Merge schon lief.
+geschlossenen PR. Was die beiden Fälle trennt, ist also weder der Zustand des
+PR beim Posten noch, ob beim Merge ein Lauf lief — auf `#68` lief keiner. Es ist
+der **Auslöser**: Lag er vor dem Merge, entfällt das Ergebnis; lag er danach,
+kommt es.
+
+Der Unterschied ist keine Wortklauberei, er ändert die Vorsichtsmassnahme. Wer
+abwartet, bis ein Lauf *sichtbar startet*, und dann mergt, ist nicht geschützt:
+`#68` ist genau der Fall, in dem beim Merge noch nichts zu sehen war und das
+Ergebnis trotzdem verfiel. Abzuwarten ist das Ergebnis, nicht der Start.
 
 Praktisch ist das die gute Nachricht des Abschnitts: Der Ersatz, den er unten
 empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft, und der
@@ -399,7 +409,7 @@ bekam. Was bleibt, ist ein Ersatz, keine Rekonstruktion: eine frische Prüfung
 auf dem Merge-Commit oder in einem Folge-PR, deren Ergebnis für sich steht.
 
 **Es sei denn, die Urheberschaft räumt sich selbst auf.** Auf `#69` fiel derselbe
-Merge-während-des-Laufs-Fall an — Merge 09:56:04, `✅ Completed` auf `85658be`
+Merge-vor-dem-Ergebnis-Fall an — Merge 09:56:04, `✅ Completed` auf `85658be`
 um 09:57:17, kein Ergebnis —, und dort ist der Ausgang doch herausgekommen. Um
 11:42:47 stand am PR ein `+1: 1`; der von Hand angestossene Lauf endete um
 11:44:33 mit einem Befund, und um 11:44:39 war die Summe `0`. Wegnehmen kann eine
@@ -489,7 +499,7 @@ Grund ist genau der Commit: Sie nennt keinen und wird beim nächsten Lauf
 überschrieben. Sie sagt «gerade läuft etwas» oder «der letzte Lauf war sauber»,
 nie «dieser Head ist geprüft».
 
-Das gilt auch im Merge-während-des-Laufs-Fall oben, wo sie als einzige Quelle
+Das gilt auch im Merge-vor-dem-Ergebnis-Fall oben, wo sie als einzige Quelle
 für den Ausgang übrig zu bleiben scheint: Die Summe im Feld `reactions` trennt
 Codex nicht von einem Menschen, und den Urheber liefert hier kein Werkzeug —
 ausser dem Glücksfall dort oben, in dem ein späterer Befund die Reaktion wegräumt
@@ -552,6 +562,14 @@ Sechzig Sekunden zwischen der Meldung und einem gelungenen Lauf, dasselbe Repo,
 derselbe Commit, an den Einstellungen nichts geändert. Der Text behauptet eine
 Konfigurationslücke; belegt ist nur, dass kein Lauf zustande kam.
 
+**Und es braucht nicht einmal den zweiten Anstoss.** Am 30.8.2026 auf
+`swiss-efv-mcp#70` folgte auf **einen einzigen** «@codex review» erst um
+11:51:56 die Meldung und dann um 11:52:04 der Start eines gewöhnlichen Laufs,
+Auslöser «Manual request», acht Sekunden später, ohne dass jemand etwas tat.
+Der Lauf endete um 11:54:08 mit einem Befund. Die Meldung war hier also nicht
+einmal ein verlorener Lauf, sondern eine Zwischenmeldung des Laufs, der ohnehin
+kam.
+
 Das ist dieselbe Klasse wie der 403 weiter oben — eine Störung, als Auskunft
 verpackt —, aber mit der **umgekehrten** Handlungsanweisung als beim 400er:
 
@@ -559,7 +577,8 @@ verpackt —, aber mit der **umgekehrten** Handlungsanweisung als beim 400er:
   Wiederholungsrat wäre dort falsch gewesen, gesucht werden musste der fehlende
   Parameter.
 - Hier trennt genau ein Wiederholungslauf «stabil» von «Aussetzer», und er
-  kostet nichts. **Erst wiederholen, dann konfigurieren.** Wer der Meldung
+  kostet nichts. **Erst abwarten, dann wiederholen, dann konfigurieren** — das
+  Abwarten steht seit `#70` vorn, weil der Lauf dort ganz von selbst kam. Wer der Meldung
   sofort folgt, legt eine Environment an, die es schon gibt, und hält das
   Problem danach für gelöst.
 
