@@ -1,29 +1,25 @@
-"""Was am Protokoll-Pin dieses Servers noch nicht gesichert war.
+"""Der Protokoll-Pin dieses Servers — jetzt ein Paar statt einer Zeichenkette.
 
-Ein Gate gibt es hier bereits: `test_negotiated_protocol_version_matches_pin`
-in `tests/test_hardening.py` faehrt einen echten `initialize` und vergleicht
-die ausgehandelte Revision mit `MCP_PROTOCOL_VERSION`. Das ist die wichtigste
-Haelfte, und sie bleibt, wo sie ist.
+Bis zum 18.9.2026 stand hier **eine** Revision, `2025-11-25`, mit der
+Begruendung: fastmcp 3.x pinne `mcp` 1.x, und dort gebe es nur eine
+Protokoll-Aera. Diese Datei trug den Test, der genau diese Begruendung an das
+SDK band statt an einen Kommentar — `test_das_sdk_kennt_hier_nur_eine_aera`.
+Er hat ausgeloest: `fastmcp>=3.4` loeste am 18.9.2026 zu fastmcp 4.0.5 auf,
+das `mcp` 2.2.0 mitbringt, und damit gibt es zwei Aeren:
 
-Drei Luecken blieben daneben offen:
+  - **Handshake** (`initialize`), Obergrenze `LATEST_HANDSHAKE_VERSION`
+  - **modern** (`server/discover` + Umschlag pro Anfrage),
+    `LATEST_MODERN_VERSION` — das ist `2026-07-28`
 
-1. `MCP_PROTOCOL_VERSION` war eine freie Zeichenkette. Wer sie beim naechsten
-   SDK-Bump nachzieht, bekommt einen gruenen Lauf — auch wenn er sich vertippt
-   oder eine Revision einsetzt, die das SDK gar nicht kennt. Der Pin ist jetzt
-   gegen `LATEST_PROTOCOL_VERSION` gehalten.
-2. Beide READMEs nennen die Revision im Fliesstext — aber nichts hielt sie
-   gegen den Pin. Zwei Prosastellen, die man beim Nachziehen uebersehen kann;
-   im Portfolio sind READMEs aus genau diesem Grund schon dreimal
-   auseinandergelaufen.
-3. Nichts sagte, warum hier **eine** Revision steht statt eines Paares.
+Warum ein Paar und nicht einfach der neuere Wert: `LATEST_PROTOCOL_VERSION` ist
+in `mcp` 2.x ein Alias auf die *moderne* Aera. Wer nur dagegen pinnt, sagt
+nichts darueber, was ein Client der alten Aera bekommt — und der Handshake wird
+weiterhin bedient. Ein Pin, der nur eine der beiden Aeren beschreibt, sieht
+geprueft aus und ist es zur Haelfte.
 
-Zu Punkt 3: Die Schwester-Server im Portfolio pinnen ein Paar — eine
-Handshake-Obergrenze und eine moderne Revision —, weil `mcp` 2.x zwei
-Protokoll-Aeren ueber denselben Server bedient. Dieser Server faehrt fastmcp
-3.x, und das pinnt `mcp` 1.x: dort gibt es `mcp.types.version` gar nicht.
-`test_das_sdk_kennt_hier_nur_eine_aera` ist deshalb an das SDK gebunden statt
-an diesen Absatz und faellt, sobald ein Upgrade die beiden Konstanten
-hereinzieht.
+Die Zusicherungen hier sind bewusst gegen die SDK-Konstanten gehalten und nicht
+gegen abgeschriebenen Spec-Text: ein Tippfehler im Pin faellt damit auch dann
+auf, wenn er zufaellig wie eine Revision aussieht.
 """
 
 from __future__ import annotations
@@ -32,66 +28,77 @@ import pathlib
 import re
 
 import pytest
-from mcp.types import LATEST_PROTOCOL_VERSION
 
-from swiss_efv_mcp.server import MCP_PROTOCOL_VERSION
+from swiss_efv_mcp.server import (
+    MCP_HANDSHAKE_PROTOCOL_VERSION,
+    MCP_MODERN_PROTOCOL_VERSION,
+)
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-def test_der_pin_ist_die_revision_des_sdk() -> None:
-    """Gegen die SDK-Konstante gehalten, nicht gegen abgeschriebenen Spec-Text.
+def test_das_sdk_fuehrt_weiterhin_zwei_aeren() -> None:
+    """Die Voraussetzung des Paares, an das SDK gebunden.
 
-    Der bestehende Handshake-Test faellt zwar auch, wenn das SDK die Revision
-    anhebt — aber er sagt dann nur, dass zwei Werte auseinanderliegen. Diese
-    Zeile benennt den Grund, und sie faellt auch bei einem Tippfehler im Pin,
-    den das SDK gar nicht kennt.
+    Faellt `mcp` je wieder auf eine Aera zurueck — oder kommt eine dritte —,
+    sagt dieser Test es, bevor die beiden Tests darunter raten muessen, welche
+    Konstante sie meinen. Unter `mcp` 1.x gibt es `mcp.types.version` gar nicht;
+    der Import faellt dann, und das ist die richtige Meldung: `fastmcp>=4.0` in
+    `pyproject.toml` ist unterschritten.
     """
-    assert MCP_PROTOCOL_VERSION == LATEST_PROTOCOL_VERSION, (
-        f"Pin steht auf {MCP_PROTOCOL_VERSION}, das SDK auf "
-        f"{LATEST_PROTOCOL_VERSION}. Beide READMEs mitziehen."
+    from mcp.types import version as sdk_version
+
+    assert hasattr(sdk_version, "LATEST_HANDSHAKE_VERSION")
+    assert hasattr(sdk_version, "LATEST_MODERN_VERSION")
+    assert sdk_version.MODERN_PROTOCOL_VERSIONS == (sdk_version.LATEST_MODERN_VERSION,), (
+        "Das SDK serviert jetzt mehr als eine moderne Revision "
+        f"({sdk_version.MODERN_PROTOCOL_VERSIONS}). Der Pin nennt genau eine und "
+        "muss erweitert werden."
     )
+
+
+def test_der_moderne_pin_ist_die_moderne_revision_des_sdk() -> None:
+    from mcp.types.version import LATEST_MODERN_VERSION
+
+    assert MCP_MODERN_PROTOCOL_VERSION == LATEST_MODERN_VERSION, (
+        f"Pin steht auf {MCP_MODERN_PROTOCOL_VERSION}, das SDK auf "
+        f"{LATEST_MODERN_VERSION}. Beide READMEs mitziehen."
+    )
+
+
+def test_der_handshake_pin_ist_die_handshake_obergrenze_des_sdk() -> None:
+    from mcp.types.version import LATEST_HANDSHAKE_VERSION
+
+    assert MCP_HANDSHAKE_PROTOCOL_VERSION == LATEST_HANDSHAKE_VERSION, (
+        f"Pin steht auf {MCP_HANDSHAKE_PROTOCOL_VERSION}, das SDK auf {LATEST_HANDSHAKE_VERSION}."
+    )
+
+
+def test_die_beiden_aeren_sind_verschieden() -> None:
+    """Sonst waere das Paar eine verdoppelte Zeichenkette und keine Aussage.
+
+    Ohne diese Zeile blieben die beiden Tests darueber auch dann gruen, wenn
+    jemand beide Pins auf denselben Wert setzt — und genau dann waere die
+    Unterscheidung, um derentwillen das Paar existiert, wieder weg.
+    """
+    assert MCP_MODERN_PROTOCOL_VERSION != MCP_HANDSHAKE_PROTOCOL_VERSION
 
 
 @pytest.mark.parametrize("datei", ["README.md", "README.de.md"])
-def test_beide_readmes_nennen_dieselbe_revision(datei: str) -> None:
+@pytest.mark.parametrize(
+    "revision",
+    [MCP_MODERN_PROTOCOL_VERSION, MCP_HANDSHAKE_PROTOCOL_VERSION],
+)
+def test_beide_readmes_nennen_beide_revisionen(datei: str, revision: str) -> None:
     """Eine Doku, die anderes sagt als der Server tut, ist die teurere Haelfte
     des Problems: sie sieht geprueft aus.
 
-    Beide Sprachen einzeln parametrisiert. Nur die englische zu pruefen hiesse,
-    die deutsche beim naechsten Bump stehenzulassen, ohne dass es auffaellt —
-    im Portfolio ist genau das schon dreimal passiert.
+    Zweifach parametrisiert. Nur die englische zu pruefen hiesse, die deutsche
+    beim naechsten Bump stehenzulassen, ohne dass es auffaellt — im Portfolio
+    ist genau das schon dreimal passiert. Und nur die moderne Revision zu
+    pruefen hiesse, die Aera unerwaehnt zu lassen, die aeltere Clients
+    tatsaechlich bekommen.
     """
     text = (_ROOT / datei).read_text(encoding="utf-8")
     revisionen = set(re.findall(r"`(20\d\d-\d\d-\d\d)`", text))
-    assert MCP_PROTOCOL_VERSION in revisionen, (
-        f"{datei} nennt {sorted(revisionen)}, erwartet {MCP_PROTOCOL_VERSION}"
-    )
-
-
-def test_das_sdk_kennt_hier_nur_eine_aera() -> None:
-    """Warum dieser Server keinen Zwei-Aeren-Pin fuehrt — und wann er einen braucht.
-
-    `mcp` 2.x bedient zwei Protokoll-Aeren ueber denselben Server: den alten
-    `initialize`-Handshake mit eigener Obergrenze und die neuere Umschlagform
-    pro Anfrage. Beide Konstanten leben in `mcp.types.version`, und
-    `LATEST_PROTOCOL_VERSION` ist dort ein Alias auf die *moderne* Aera — wer
-    nur gegen ihn pinnt, sichert die Aera, die heute praktisch niemand spricht.
-
-    Unter `mcp` 1.x gibt es das Modul nicht und die Frage stellt sich nicht.
-    Zieht ein fastmcp-Upgrade `mcp` 2.x herein, faellt dieser Test und sagt,
-    dass der Pin auf ein Paar erweitert werden muss.
-    """
-    try:
-        import mcp.types.version as sdk_version
-    except ModuleNotFoundError:
-        return  # mcp 1.x: eine Aera, nichts zu trennen
-
-    handshake = getattr(sdk_version, "LATEST_HANDSHAKE_VERSION", None)
-    modern = getattr(sdk_version, "LATEST_MODERN_VERSION", None)
-    pytest.fail(
-        "Das SDK fuehrt jetzt zwei Protokoll-Aeren "
-        f"(Handshake {handshake}, modern {modern}). MCP_PROTOCOL_VERSION pinnt "
-        "nur eine Revision und muss auf ein Paar erweitert werden, sonst sichert "
-        "der Pin die Aera, die heutige Clients nicht sprechen."
-    )
+    assert revision in revisionen, f"{datei} nennt {sorted(revisionen)}, erwartet {revision}"

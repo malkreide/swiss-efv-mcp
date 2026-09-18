@@ -3,7 +3,7 @@
 
 # 🏛️ swiss-efv-mcp
 
-[![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
 [![CI](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
@@ -251,15 +251,41 @@ schreibfähigen Tools ein Re-Audit erfordern.
 
 ## MCP-Protokoll-Version
 
-Die Protokoll-Version wird beim `initialize`-Handshake von
-[FastMCP](https://pypi.org/project/fastmcp/) ausgehandelt (fixiert `fastmcp>=3.4`
-in `pyproject.toml`), das auf dem `mcp`-Python-SDK aufbaut. Die Baseline, gegen
-die dieser Server gebaut und auditiert ist, ist **`2025-11-25`**, in `server.py`
-als `MCP_PROTOCOL_VERSION` fixiert; ein Regressionstest prüft, dass die
-ausgehandelte Version weiterhin damit übereinstimmt — ein protokoll-ändernder
-SDK-Bump bricht so die CI **laut** (ARCH-012). Abhängigkeiten werden über
-monatliche Dependabot-PRs aktuell gehalten (`.github/dependabot.yml`);
-protokoll-relevante Bumps werden in [`CHANGELOG.md`](CHANGELOG.md) vermerkt.
+Dieser Server ist nativ auf der MCP-Spec **`2026-07-28`** und bedient die
+ältere Handshake-Ära weiterhin. Deshalb stehen hier **zwei** Pins: eine einzelne
+Zahl beschriebe nur die Hälfte dessen, was Clients tatsächlich bekommen.
+
+| Ära | Revision | Wie eine Verbindung sie aushandelt | Fixiert als |
+|---|---|---|---|
+| **modern** (Vorgabe) | **`2026-07-28`** | `server/discover` + Umschlag pro Anfrage; **kein `initialize`-Handshake**, `Client.initialize_result` ist `None` | `MCP_MODERN_PROTOCOL_VERSION` |
+| Handshake (ältere Clients) | **`2025-11-25`** | der klassische `initialize`-Handshake | `MCP_HANDSHAKE_PROTOCOL_VERSION` |
+
+Beide Konstanten stehen in `server.py` und werden gegen die SDK-eigenen
+`LATEST_MODERN_VERSION` / `LATEST_HANDSHAKE_VERSION` gehalten statt gegen
+abgeschriebenen Spec-Text; beide Ären werden zusätzlich mit einer echten
+Verbindung nachgefahren. Ein protokoll-ändernder SDK-Bump bricht so die CI
+**laut**, statt still zu driften (ARCH-012).
+
+Die Ära `2026-07-28` bringt mehr mit als die Zahl:
+
+- **Routing-Header.** Jede moderne Anfrage trägt `Mcp-Protocol-Version`,
+  `Mcp-Method` und — bei `tools/call` — `Mcp-Name`. Sie stehen in der
+  CORS-Freigabeliste in `__main__.py`; ohne sie scheitert ein Browser-Client
+  bereits am Preflight und erreicht den Server nie. `Mcp-Param-*` fehlt
+  bewusst: kein Tool-Schema hier trägt die Annotation `x-mcp-header`, die einen
+  Client dazu brächte, einen solchen Header zu senden — ein Test fällt an dem
+  Tag, an dem eines sie bekommt.
+- **Logging ist abgekündigt (SEP-2577).** Die Tool-Handler schicken keine
+  Log-Benachrichtigungen mehr an den Client; die Diagnose pro Aufruf liegt im
+  structlog-Strom auf stderr und richtet sich nach `EFV_MCP_LOG_LEVEL`. Die
+  Fortschrittsmeldung ist nicht betroffen und bleibt.
+- **`fastmcp>=4.0` ist ein Boden, keine Kosmetik.** Erst fastmcp 4 zieht `mcp`
+  2.x herein, und erst dort existiert die Revision `2026-07-28` überhaupt.
+  Unter fastmcp 3.x spräche dieser Server höchstens `2025-11-25`.
+
+Abhängigkeiten werden über monatliche Dependabot-PRs aktuell gehalten
+(`.github/dependabot.yml`); protokoll-relevante Bumps werden in
+[`CHANGELOG.md`](CHANGELOG.md) vermerkt.
 
 ## Testing
 
