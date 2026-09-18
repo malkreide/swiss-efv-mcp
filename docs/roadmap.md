@@ -21,13 +21,18 @@ addressed in the current cycle are struck through.
 - ✅ ARCH-002 — tool descriptions with use-case context
 - ✅ ARCH-003 — helpful `note` on empty results (no silent empties)
 - ✅ SDK-002 — typed Pydantic tool outputs (output schema exposed)
-- ✅ SDK-003 — `Context` injection for logging / progress
+- ✅ SDK-003 — `Context` injection for progress reporting (client-facing logging
+  dropped: the `logging` capability is deprecated as of spec `2026-07-28`,
+  SEP-2577; per-call diagnostics go to the structlog stderr stream)
 - ✅ SEC-004 — reject IP-literal hosts and re-assert the allow-list after redirects
 - ✅ SCALE-006 / SEC-007 — `compose.yaml` with resource limits, read-only rootfs, dropped caps
 - ✅ OBS-006 — optional OpenTelemetry tracing (`[otel]` extra, env-gated)
 - ✅ OPS-001 — per-tool live tests + nightly live workflow
-- ARCH-012 — MCP protocol version is negotiated by FastMCP at the `initialize`
-  handshake and kept current via Dependabot; explicit pinning is deferred.
+- ✅ ARCH-012 — the MCP protocol version is pinned explicitly, as a **pair**:
+  `MCP_MODERN_PROTOCOL_VERSION` (`2026-07-28`, negotiated via `server/discover`)
+  and `MCP_HANDSHAKE_PROTOCOL_VERSION` (`2025-11-25`, the classic `initialize`
+  handshake). Both are held against the `mcp` SDK's own constants and exercised
+  over a real connection, so a protocol-changing SDK bump fails CI loudly.
 - SEC-022 — server-identity namespace is provided by the MCP Registry name
   (`io.github.malkreide/swiss-efv-mcp`); renaming the unprefixed `dump_status`
   tool is deferred to avoid a breaking change after the 0.2.0 release.
