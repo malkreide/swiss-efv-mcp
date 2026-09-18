@@ -17,9 +17,11 @@ richtig aussieht, kann trotzdem nie an der Middleware ankommen.
 from __future__ import annotations
 
 import pytest
+from fastmcp import Client
 from starlette.testclient import TestClient
 
 from swiss_efv_mcp.__main__ import CORS_ALLOW_HEADERS, CORS_ALLOW_METHODS, build_http_app
+from swiss_efv_mcp.server import mcp
 from swiss_efv_mcp.settings import Settings
 
 ORIGIN = "https://client.example"
@@ -108,32 +110,63 @@ def test_keine_wildcard_in_der_freigabeliste() -> None:
     assert "*" not in CORS_ALLOW_HEADERS
 
 
-def test_die_routing_header_gehoeren_hierher_sobald_das_sdk_sie_liest() -> None:
-    """Warum `Mcp-Method` & Co. hier **nicht** stehen — und wann sie müssen.
+def test_die_routing_header_stehen_in_der_freigabeliste() -> None:
+    """Die drei Header, über die Spec `2026-07-28` eine Anfrage routet.
 
-    Spec `2026-07-28` routet eine Anfrage über drei Header. Gelesen werden sie
-    von `mcp.shared.inbound`, und das Modul gibt es erst ab `mcp` 2.x. fastmcp
-    3.x pinnt `mcp` 1.x: dieser Server liest sie schlicht nicht, und sie zu
-    nennen wäre dieselbe Raterei wie die Wildcard.
+    Dieser Test hiess bis zum 18.9.2026 `..._sobald_das_sdk_sie_liest` und
+    übersprang sich unter `mcp` 1.x, wo es die Header nicht gab. Er hat
+    ausgelöst: `fastmcp>=4` zieht `mcp` 2.x herein, und
+    `mcp.server._streamable_http_modern` liest sie auf jeder Anfrage der
+    modernen Ära.
 
-    Der Test ist deshalb an das SDK gebunden statt an eine Notiz im Kommentar.
-    Zieht ein Upgrade `mcp.shared.inbound` herein, fällt er — und sagt, dass die
-    Liste nachziehen muss, bevor Browser-Clients daran scheitern.
+    Die Namen kommen weiterhin aus `mcp.shared.inbound` und nicht aus einem
+    Literal: eine abgeschriebene Liste kann still von der SDK-Schreibweise
+    abweichen, und CORS-Header sind auf beiden Seiten kleingeschrieben zu
+    vergleichen.
     """
-    try:
-        from mcp.shared.inbound import (
-            MCP_METHOD_HEADER,
-            MCP_NAME_HEADER,
-            MCP_PROTOCOL_VERSION_HEADER,
-        )
-    except ModuleNotFoundError:
-        pytest.skip("mcp 1.x: es gibt keine Routing-Header, die freizugeben waeren")
+    from mcp.shared.inbound import (
+        MCP_METHOD_HEADER,
+        MCP_NAME_HEADER,
+        MCP_PROTOCOL_VERSION_HEADER,
+    )
 
     erlaubt = {h.lower() for h in CORS_ALLOW_HEADERS}
     noetig = {MCP_METHOD_HEADER, MCP_NAME_HEADER, MCP_PROTOCOL_VERSION_HEADER}
     assert noetig <= erlaubt, (
-        f"Das SDK liest jetzt Routing-Header, die Freigabeliste nennt sie nicht: "
-        f"{sorted(noetig - erlaubt)}"
+        f"Die Freigabeliste nennt die Routing-Header nicht: {sorted(noetig - erlaubt)}"
+    )
+
+
+async def test_kein_tool_verlangt_einen_mcp_param_header() -> None:
+    """Warum `Mcp-Param-*` **nicht** in der Freigabeliste steht.
+
+    Ein Client sendet einen solchen Header nur für einen Parameter, dessen
+    Schema die Annotation `x-mcp-header` trägt. Kein Tool dieses Servers tut
+    das, also würde ein Eintrag einen Header freigeben, den nie jemand schickt
+    — dieselbe Raterei wie die Wildcard, nur kleiner. Eine CORS-Liste kann ein
+    Präfix ohnehin nicht ausdrücken; käme die Annotation je dazu, bräuchte es
+    eine andere Lösung als eine Zeile mehr.
+
+    Der Test ist deshalb an die Schemata gebunden und nicht an diesen Absatz:
+    bekommt ein Tool die Annotation, fällt er.
+    """
+    from mcp.shared.inbound import X_MCP_HEADER_KEY
+
+    def traegt_annotation(knoten) -> bool:
+        if isinstance(knoten, dict):
+            return X_MCP_HEADER_KEY in knoten or any(traegt_annotation(v) for v in knoten.values())
+        if isinstance(knoten, list):
+            return any(traegt_annotation(v) for v in knoten)
+        return False
+
+    # Gegen das *ausgelieferte* Schema geprueft, nicht gegen die Registrierung:
+    # der Client entscheidet anhand dessen, was `tools/list` ihm zeigt.
+    async with Client(mcp) as c:
+        tools = await c.list_tools()
+    schuldige = [t.name for t in tools if traegt_annotation(t.input_schema)]
+    assert not schuldige, (
+        f"{schuldige} tragen jetzt `{X_MCP_HEADER_KEY}`; ein Browser-Client sendet "
+        f"dafuer `Mcp-Param-*`-Header, die der Preflight abweist."
     )
 
 

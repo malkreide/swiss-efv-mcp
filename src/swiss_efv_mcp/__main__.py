@@ -22,26 +22,47 @@ from .settings import get_settings
 
 _NETWORK = {"sse", "streamable-http", "http"}
 
-# `allow_headers` stood at `["*"]`. Starlette switches to `allow_all_headers`
-# on a wildcard and mirrors back whatever a browser announces, so every listed
-# origin could send any header at all — that is not an allow-list, it is the
-# absence of one. It also hides every drift, because a wildcard cannot become
-# wrong: drop a header the protocol needs and nothing turns red.
+# Die drei Routing-Header der Spec `2026-07-28` standen hier bis zum 18.9.2026
+# **nicht**, mit der Begruendung, fastmcp 3.x pinne `mcp` 1.x und lese sie gar
+# nicht. Die Begruendung ist weggefallen: `fastmcp>=4` zieht `mcp` 2.x herein,
+# und `mcp.server._streamable_http_modern` liest sie auf jeder Anfrage der
+# modernen Aera. `classify_inbound_request` weist eine Anfrage, deren
+# `Mcp-Protocol-Version` / `Mcp-Method` / `Mcp-Name` nicht zum Umschlag passen,
+# mit `HEADER_MISMATCH` (-32020) ab — ein Browser-Client, dem der Preflight
+# diese Header verbietet, kommt gar nicht erst bis dorthin.
 #
-# `Last-Event-ID` is how a client resumes a dropped SSE stream
-# (`LAST_EVENT_ID_HEADER` in `mcp.server.streamable_http`). Omitting it breaks
-# only reconnection after packet loss — the worst way to find a bug.
+# Gemessen, nicht abgeschrieben: die Namen kommen aus `mcp.shared.inbound`, und
+# `test_die_routing_header_stehen_in_der_freigabeliste` haelt die Liste gegen
+# genau diese Konstanten.
 #
-# The `Mcp-Method` / `Mcp-Name` / `Mcp-Protocol-Version` routing headers of spec
-# 2026-07-28 are deliberately **absent**: fastmcp 3.x pins `mcp` 1.x, where
-# `mcp.shared.inbound` does not exist and nothing reads them. Listing headers
-# this server never reads would be the same guesswork the wildcard was.
-# `test_the_routing_headers_belong_here_once_the_sdk_reads_them` fails the day
-# that changes.
+# `Mcp-Param-*` (Praefix `MCP_PARAM_HEADER_PREFIX`) steht bewusst nicht hier.
+# Erstens kann eine CORS-Freigabeliste kein Praefix ausdruecken — sie nennt
+# Namen. Zweitens sendet ein Client solche Header nur fuer Parameter, deren
+# Schema die Annotation `x-mcp-header` traegt; kein Tool dieses Servers tut das.
+# Sie zu raten waere dieselbe Wildcard in klein.
+# `test_kein_tool_verlangt_einen_mcp_param_header` faellt an dem Tag, an dem ein
+# Tool die Annotation bekommt.
+#
+# `Last-Event-ID` ist, wie ein Client einen abgerissenen SSE-Strom fortsetzt
+# (`LAST_EVENT_ID_HEADER` in `mcp.server.streamable_http`). Fehlt er, bricht
+# ausschliesslich die Wiederaufnahme nach Paketverlust — die schlechteste Art,
+# einen Fehler zu finden.
+#
+# `Mcp-Session-Id` gehoert der Handshake-Aera: die moderne ist sessionlos. Er
+# bleibt, weil `mode="legacy"` weiterhin bedient wird.
+#
+# `allow_headers` stand einmal auf `["*"]`. Starlette schaltet auf einer
+# Wildcard nach `allow_all_headers` und spiegelt zurueck, was ein Browser
+# ankuendigt — das ist keine Freigabeliste, sondern ihr Fehlen. Es verbirgt
+# ausserdem jede Drift, weil eine Wildcard nicht falsch werden kann: faellt ein
+# Header weg, den das Protokoll braucht, bleibt trotzdem alles gruen.
 CORS_ALLOW_HEADERS = [
     "Content-Type",
     "Mcp-Session-Id",
     "Last-Event-ID",
+    "Mcp-Protocol-Version",
+    "Mcp-Method",
+    "Mcp-Name",
 ]
 
 # `DELETE` beendet eine Session ausdruecklich. Es fehlte hier, und der Preflight

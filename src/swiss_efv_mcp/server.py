@@ -20,7 +20,9 @@ from fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from . import __version__
 from .client import EFVClient, clean, is_projection, to_float, to_year
+from .logging_config import get_logger
 from .models import (
     BreakdownItem,
     BudgetBreakdown,
@@ -35,6 +37,20 @@ from .models import (
 client = EFVClient()
 
 
+def _log():
+    """Den Logger erst beim Aufruf holen, nie beim Import.
+
+    `get_logger` ruft `configure_logging()` nach, wenn noch nichts konfiguriert
+    ist. Stuende der Aufruf auf Modulebene, waere die Konfiguration schon beim
+    `from .server import mcp` in `__main__.py` festgelegt — mit der Vorgabe
+    `INFO` — und ein spaeteres `configure_logging(settings.log_level)` muesste
+    umkonfigurieren koennen, um noch etwas zu bewirken.
+    `test_der_eingestellte_log_level_wirkt_trotz_import_reihenfolge` haelt das
+    Zusammenspiel fest.
+    """
+    return get_logger(__name__)
+
+
 @asynccontextmanager
 async def _lifespan(_server: FastMCP):
     """Own the shared HTTP client; close it cleanly on shutdown (SDK-001)."""
@@ -44,18 +60,44 @@ async def _lifespan(_server: FastMCP):
         await client.aclose()
 
 
-# MCP protocol baseline this server is built and audited against (ARCH-012).
-# FastMCP negotiates the concrete version at the `initialize` handshake; a
-# regression test asserts the negotiated version still equals this constant, so a
-# protocol-changing SDK bump fails CI loudly instead of drifting silently. The
-# `mcp` SDK floor in pyproject.toml (via fastmcp) is what supplies this version;
-# Dependabot keeps it current.
-MCP_PROTOCOL_VERSION = "2025-11-25"
+# Die beiden Protokoll-Aeren, die dieser Server bedient (ARCH-012).
+#
+# Bis `mcp` 1.x gab es nur eine: jede Verbindung begann mit dem
+# `initialize`-Handshake, und ein einzelner Pin genuegte. `mcp` 2.x fuehrt
+# daneben die *moderne* Aera `2026-07-28` (SEP-2322) — dort gibt es keinen
+# Handshake mehr, sondern `server/discover` und einen Umschlag pro Anfrage.
+# `Client.initialize_result` ist auf einer solchen Verbindung `None`; wer
+# weiterhin dagegen prueft, prueft eine Aera, die moderne Clients nicht sprechen.
+#
+# Deshalb ein Paar statt einer Zeichenkette. Beide Werte sind gegen die
+# SDK-Konstanten gehalten (`tests/test_protocol_version.py`), und beide werden
+# mit einer echten Verbindung nachgefahren — `mode="auto"` fuer die moderne,
+# `mode="legacy"` fuer die Handshake-Aera. Ein protokoll-aenderndes SDK-Update
+# faellt damit laut auf, statt still zu driften.
+MCP_MODERN_PROTOCOL_VERSION = "2026-07-28"
+"""Die Revision, die eine frische Verbindung hier aushandelt (`server/discover`)."""
+
+MCP_HANDSHAKE_PROTOCOL_VERSION = "2025-11-25"
+"""Die Obergrenze, die ein Client der alten Aera ueber `initialize` noch bekommt."""
 
 # `mask_error_details=True` keeps upstream/internal error text out of tool
 # results (OBS-002); execution errors surface as `isError` tool-results while
 # protocol errors stay JSON-RPC errors (OBS-001).
-mcp = FastMCP("swiss-efv-mcp", lifespan=_lifespan, mask_error_details=True)
+#
+# `version=` ist nicht kosmetisch. Ohne das Argument traegt das `serverInfo`
+# der Verbindung die Version von *FastMCP* — gemessen am 18.9.2026 meldete
+# dieser Server `4.0.5` statt seiner eigenen `0.4.0`. Ein Client, der die
+# Serverversion protokolliert oder gegen bekannte Fehler abgleicht, bekam
+# damit die Nummer einer fremden Bibliothek. Die Nummer kommt aus den
+# Paket-Metadaten, nicht aus einem Literal (`scripts/check_version_sync.py`
+# verbietet Literale in `src/`).
+mcp = FastMCP(
+    "swiss-efv-mcp",
+    version=__version__,
+    website_url="https://github.com/malkreide/swiss-efv-mcp",
+    lifespan=_lifespan,
+    mask_error_details=True,
+)
 
 # Every tool is read-only: it only issues HTTP GETs against the EFV dumps and
 # never writes. `openWorldHint` is True because responses depend on external
@@ -254,7 +296,6 @@ async def fiscal_headline(
     model: Annotated[str, Field(max_length=20)] = "fs",
     year_from: Annotated[int | None, Field(ge=1900, le=2100)] = None,
     year_to: Annotated[int | None, Field(ge=1900, le=2100)] = None,
-    ctx: Context | None = None,
 ) -> HeadlineSeries:
     """Headline fiscal time series: revenue, expenditure, balance and debt ratios
     from 1990 to the latest year the EFV publishes, actuals and forward-looking
@@ -266,8 +307,7 @@ async def fiscal_headline(
     'einnahmen', 'ausgaben', 'bruttoschuldenquote'. household: bund|ktn|gdn|staat|sv.
     model: fs|gfs. Every point flags `is_projection`. Call fiscal_list_dimensions
     first to discover valid values; an empty result carries a `note` with guidance."""
-    if ctx is not None:
-        await ctx.debug(f"fiscal_headline variable={variable!r} household={household!r}")
+    _log().debug("fiscal_headline", variable=variable, household=household, model=model)
     return await headline_impl(client, variable, household, model, year_from, year_to)
 
 
@@ -277,7 +317,6 @@ async def fiscal_budget_breakdown(
     year: Annotated[int | None, Field(ge=1900, le=2100)] = None,
     level: Annotated[int, Field(ge=1, le=8)] = 2,
     contains: Annotated[str | None, Field(max_length=120)] = None,
-    ctx: Context | None = None,
 ) -> BudgetBreakdown:
     """Hierarchical federal-budget breakdown for one topic and year.
 
@@ -286,8 +325,7 @@ async def fiscal_budget_breakdown(
     Art', 'Einnahmen'. level is the hierarchy depth (1 = total, 2 = first
     breakdown …); 'contains' filters the path substring for drill-down. An empty
     result carries a `note` suggesting a different level or topic."""
-    if ctx is not None:
-        await ctx.debug(f"fiscal_budget_breakdown topic={topic!r} level={level}")
+    _log().debug("fiscal_budget_breakdown", topic=topic, level=level)
     return await budget_impl(client, topic, year, level, contains)
 
 
@@ -297,7 +335,6 @@ async def fiscal_by_institution(
     variable: Annotated[str, Field(max_length=80)] = "Personalausgaben",
     year_from: Annotated[int | None, Field(ge=1900, le=2100)] = None,
     year_to: Annotated[int | None, Field(ge=1900, le=2100)] = None,
-    ctx: Context | None = None,
 ) -> InstitutionSeries:
     """Federal spending by department / administrative unit since 2007.
 
@@ -306,8 +343,7 @@ async def fiscal_by_institution(
     variable one of: 'Personalausgaben', 'Informatik', 'Beratung und externe
     Dienstleistungen', 'Anzahl Vollzeitstellen'. An empty result carries a `note`
     with guidance."""
-    if ctx is not None:
-        await ctx.debug(f"fiscal_by_institution departement={departement!r} variable={variable!r}")
+    _log().debug("fiscal_by_institution", departement=departement, variable=variable)
     return await institution_impl(client, departement, variable, year_from, year_to)
 
 
@@ -319,8 +355,8 @@ async def fiscal_list_dimensions(ctx: Context | None = None) -> Dimensions:
     Use case: call this first to build correct parameters for the other tools —
     it turns free-text guesses into exact filter values. Loads all three dumps,
     so it may take a moment on a cold cache."""
+    _log().debug("fiscal_list_dimensions", stage="loading all dumps")
     if ctx is not None:
-        await ctx.debug("fiscal_list_dimensions: loading all dumps")
         await ctx.report_progress(0, 3)
     result = await dimensions_impl(client)
     if ctx is not None:
@@ -329,24 +365,22 @@ async def fiscal_list_dimensions(ctx: Context | None = None) -> Dimensions:
 
 
 @mcp.tool(annotations=_READONLY)
-async def fiscal_status(ctx: Context | None = None) -> StatusReport:
+async def fiscal_status() -> StatusReport:
     """Report cache freshness and upstream health per dataset.
 
     Use case: check whether the data is fresh, cached or degraded before trusting
     a figure — the health endpoint of this server. Never returns empty silently;
     used for graceful degradation."""
-    if ctx is not None:
-        await ctx.debug("fiscal_status")
+    _log().debug("fiscal_status")
     return status_impl(client)
 
 
 @mcp.tool(annotations=_READONLY)
-async def dump_status(ctx: Context | None = None) -> StatusReport:
+async def dump_status() -> StatusReport:
     """DEPRECATED — use `fiscal_status`. Kept as an alias for backward
     compatibility; will be removed in a future minor release.
 
     Reports cache freshness and upstream health per dataset (SEC-022: every tool
     now shares the `fiscal_` server-identity namespace)."""
-    if ctx is not None:
-        await ctx.debug("dump_status (deprecated alias of fiscal_status)")
+    _log().debug("dump_status", note="deprecated alias of fiscal_status")
     return status_impl(client)

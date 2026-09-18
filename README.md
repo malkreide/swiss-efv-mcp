@@ -3,7 +3,7 @@
 
 # 🏛️ swiss-efv-mcp
 
-[![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
 [![CI](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/malkreide/swiss-efv-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
@@ -243,14 +243,40 @@ tool is added.
 
 ## MCP Protocol Version
 
-The protocol version is negotiated at the `initialize` handshake by
-[FastMCP](https://pypi.org/project/fastmcp/) (pinned `fastmcp>=3.4` in
-`pyproject.toml`), which builds on the `mcp` Python SDK. The baseline this server
-is built and audited against is **`2025-11-25`**, pinned as `MCP_PROTOCOL_VERSION`
-in `server.py`; a regression test asserts the negotiated version still equals it,
-so a protocol-changing SDK bump fails CI loudly (ARCH-012). Dependencies are kept
-current via monthly Dependabot PRs (`.github/dependabot.yml`); protocol-relevant
-bumps are noted in [`CHANGELOG.md`](CHANGELOG.md).
+This server is native to MCP spec **`2026-07-28`** and still serves the older
+handshake era, so both pins are stated — a single number would describe only
+half of what clients actually get.
+
+| Era | Revision | How a connection negotiates it | Pinned as |
+|---|---|---|---|
+| **modern** (default) | **`2026-07-28`** | `server/discover` + a per-request envelope; **no `initialize` handshake**, and `Client.initialize_result` is `None` | `MCP_MODERN_PROTOCOL_VERSION` |
+| handshake (legacy clients) | **`2025-11-25`** | the classic `initialize` handshake | `MCP_HANDSHAKE_PROTOCOL_VERSION` |
+
+Both constants live in `server.py` and are held against the `mcp` SDK's own
+`LATEST_MODERN_VERSION` / `LATEST_HANDSHAKE_VERSION` rather than against
+copied-out spec text, and both eras are exercised over a real connection — a
+protocol-changing SDK bump fails CI loudly instead of drifting silently
+(ARCH-012).
+
+The `2026-07-28` era carries consequences beyond the number:
+
+- **Routing headers.** Every modern request carries `Mcp-Protocol-Version`,
+  `Mcp-Method` and (for `tools/call`) `Mcp-Name`. They are listed in the CORS
+  allow-list in `__main__.py`; without them a browser client fails at the
+  preflight and never reaches the server. `Mcp-Param-*` is deliberately absent —
+  no tool schema here carries the `x-mcp-header` annotation that would make a
+  client send one, and a test fails the day one does.
+- **Logging is deprecated (SEP-2577).** Tool handlers no longer send
+  client-facing log notifications; per-call diagnostics go to the structlog
+  stderr stream, honouring `EFV_MCP_LOG_LEVEL`. Progress reporting is unaffected
+  and stays.
+- **`fastmcp>=4.0` is a floor, not cosmetics.** Only fastmcp 4 pulls in `mcp`
+  2.x, and only there does revision `2026-07-28` exist at all. Under fastmcp 3.x
+  this server would speak `2025-11-25` at best.
+
+Dependencies are kept current via monthly Dependabot PRs
+(`.github/dependabot.yml`); protocol-relevant bumps are noted in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Testing
 

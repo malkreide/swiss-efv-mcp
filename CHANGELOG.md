@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Geändert
+
+- **Nativ auf MCP-Spec `2026-07-28`.** `fastmcp>=3.4` löste am 18.9.2026 zu
+  fastmcp 4.0.5 auf, das `mcp` 2.2.0 mitbringt — und damit zwei Protokoll-Ären
+  statt einer. Die vier Gates, die dieses Repo genau dafür aufgestellt hatte,
+  sind gefallen und haben getan, wofür sie da waren:
+  `test_das_sdk_kennt_hier_nur_eine_aera`,
+  `test_der_pin_ist_die_revision_des_sdk`,
+  `test_negotiated_protocol_version_matches_pin` und
+  `test_die_routing_header_gehoeren_hierher_sobald_das_sdk_sie_liest`.
+
+  `MCP_PROTOCOL_VERSION` beschrieb **eine** Ära; der Server bedient zwei. Neu
+  ist ein Paar: `MCP_MODERN_PROTOCOL_VERSION` (`2026-07-28`, ausgehandelt über
+  `server/discover` und einen Umschlag pro Anfrage) und
+  `MCP_HANDSHAKE_PROTOCOL_VERSION` (`2025-11-25`, klassischer `initialize`).
+  Beide werden gegen die SDK-Konstanten `LATEST_MODERN_VERSION` /
+  `LATEST_HANDSHAKE_VERSION` gehalten und zusätzlich mit einer echten
+  Verbindung nachgefahren.
+
+  Warum nicht einfach der neuere Wert: `LATEST_PROTOCOL_VERSION` ist in
+  `mcp` 2.x ein Alias auf die *moderne* Ära. Wer nur dagegen pinnt, sagt nichts
+  darüber, was ein Client der alten Ära bekommt — und der Handshake wird
+  weiterhin bedient. Ein Pin, der nur eine Ära beschreibt, sieht geprüft aus
+  und ist es zur Hälfte.
+
+- **`Client.initialize_result` trägt die Prüfung nicht mehr.** Auf einer
+  modernen Verbindung gibt es keinen `initialize`-Handshake, das Feld ist
+  `None`. Die alte Zusicherung fiel dort mit einem `AttributeError` auf
+  `NoneType` — also mit einer Meldung, die nach kaputtem Test klingt statt nach
+  Ärenwechsel. Geprüft wird jetzt über `protocol_version`, den ärenneutralen
+  Zugang; ein eigener Test hält den Grund fest, damit niemand die alte Form
+  zurückbaut.
+
+- **`fastmcp>=4.0` statt `>=3.4`.** Ein Boden, keine Kosmetik: erst fastmcp 4
+  zieht `mcp` 2.x herein, und erst dort existiert die Revision `2026-07-28`
+  überhaupt. Unter `>=3.4` konnte eine frische Installation still bei
+  `2025-11-25` landen, während READMEs und Pin etwas anderes sagten.
+
+- **Die `logging`-Capability ist mit `2026-07-28` abgekündigt (SEP-2577).** Die
+  Tool-Handler schickten auf jeder Anfrage ein `ctx.debug(...)` — eine
+  Benachrichtigung über genau die Capability, die diese Revision abkündigt. Die
+  Diagnose pro Aufruf liegt jetzt im structlog-Strom auf stderr, wo die README
+  sie ohnehin verortet. `report_progress` ist **nicht** betroffen und bleibt;
+  ein eigener Test hält das fest, damit «keine Benachrichtigungen mehr» nicht
+  versehentlich auch die Fortschrittsmeldung mitnimmt.
+
+### Hinzugefügt
+
+- **Die drei Routing-Header in der CORS-Freigabeliste.** Jede Anfrage der
+  modernen Ära trägt `Mcp-Protocol-Version`, `Mcp-Method` und — bei
+  `tools/call` — `Mcp-Name`; `classify_inbound_request` weist eine Anfrage, bei
+  der sie nicht zum Umschlag passen, mit `HEADER_MISMATCH` (-32020) ab. Ein
+  Browser-Client, dem der Preflight diese Header verbietet, kommt gar nicht
+  erst bis dorthin. Die Namen stehen nicht als Literal in der Liste, sondern
+  werden im Test gegen `mcp.shared.inbound` gehalten.
+
+  `Mcp-Param-*` bleibt bewusst draussen. Eine CORS-Freigabeliste kann kein
+  Präfix ausdrücken, und ein Client sendet solche Header nur für Parameter,
+  deren Schema die Annotation `x-mcp-header` trägt — kein Tool dieses Servers
+  tut das. `test_kein_tool_verlangt_einen_mcp_param_header` fällt an dem Tag,
+  an dem eines sie bekommt.
+
+### Behoben
+
+- **`serverInfo.version` meldete die Version von FastMCP statt der eigenen.**
+  Ohne `version=` im `FastMCP`-Konstruktor fällt FastMCP auf seine eigene
+  Distributionsversion zurück: gemessen am 18.9.2026 meldete dieser Server
+  `4.0.5` statt `0.4.0`. Das fällt nicht auf, weil beides plausible Versionen
+  sind — ein Client, der die Serverversion protokolliert oder gegen bekannte
+  Fehler abgleicht, bekam die Nummer einer fremden Bibliothek. Die Zusicherung
+  prüft beides: gegen `__version__` *und* gegen die fastmcp-Version, weil die
+  erste Hälfte allein auch bei zufälliger Gleichheit grün bliebe.
+
+- **`EFV_MCP_LOG_LEVEL` war wirkungslos.** `configure_logging` hatte einen
+  `if _configured: return`-Wächter, und `client.py` wie `_otel.py` holen ihren
+  Logger auf Modulebene — also schon während `from .server import mcp`, bevor
+  `main()` überhaupt die Settings gelesen hat. Der Level stand damit auf der
+  Vorgabe `INFO`, und `configure_logging(settings.log_level)` lief als No-op
+  durch. Gemessen auf dem Stand davor: `EFV_MCP_LOG_LEVEL=DEBUG` gesetzt,
+  `settings.log_level` las `DEBUG`, effektiver Root-Level blieb `INFO`. Nichts
+  wurde dabei rot.
+
+  Kein Nebenschauplatz: die Diagnose, die oben aus `ctx.debug` in den
+  structlog-Strom gewandert ist, wäre dort sonst unsichtbar geblieben.
+  `configure_logging` ist jetzt idempotent *pro Level* statt pro Prozess; ein
+  anderer Level konfiguriert um. `logging.basicConfig` allein genügt dafür
+  nicht — der Aufruf ist ein No-op, sobald der Root-Logger Handler hat.
+
 ### Behoben
 
 - **Die EFV stellte die `source`-Spalte auf Deutsch um — `is_projection` fiel
