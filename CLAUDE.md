@@ -362,6 +362,8 @@ Zwei Anker, in dieser Reihenfolge:
    und ist das einzige Objekt, das beide Ausgänge gleich behandelt. Stimmt der
    Commit mit dem Head, ist der Head geprüft — geprüft, nicht notwendig sauber:
    Den Ausgang nennt der Bericht nicht.
+   **Nach dem Merge nicht:** Dort nennt der Bericht den Head des PR, das
+   Ergebnis den Merge-Commit — weiter unten, bei den Läufen nach dem Merge.
 2. **Fehlt der Bericht**, trägt jedes Codex-Ergebnis seinen Commit selbst — das
    Review-Objekt wie die Befundlos-Meldung, beide als «Reviewed commit». Dann
    das **jüngste** von beiden nehmen und dessen Commit vergleichen; das ältere
@@ -404,27 +406,37 @@ trotzdem. «Es läuft noch nichts» ist also kein sicheres Zeichen. Ob ein Merge
 sichergehen will, wartet nicht auf den Start, sondern auf das Ergebnis.
 
 Praktisch ist das die gute Nachricht des Abschnitts: Der Ersatz, den er unten
-empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft. **Welchen
-Commit** er prüft, ist dagegen keine Regel: Auf `#69` war es der
-**Merge-Commit** (`21a3224`), nicht der Head des gemergten Branches. Am
-23.9.2026 auf `#75` war es umgekehrt — Merge um 16:42:31 als `e78ca3b`,
-«@codex review» um 16:47, der Statusbericht um 16:47:25 nannte `c0bb12b`, den
-Head des Branches, Auslöser «Manual request».
+empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft, und der
+geprüfte Commit ist dann der **Merge-Commit** — laut Ergebnis. Der
+Statusbericht nennt dabei einen anderen:
 
-Was die beiden trennt, ist nicht gemessen. Offen liegt ein Unterschied: Auf
-`#69` kam der Anstoss 1 h 46 min nach dem Merge, auf `#75` fünf Minuten danach.
-Ob das der Grund ist, geben zwei Beobachtungen nicht her. Den Zustand des
-Branches taugt nicht als Erklärung, soweit gemessen: Beide sind heute gelöscht,
-und wann der von `#75` verschwand, ist nicht festgehalten.
+| PR | Statusbericht (`✅ Completed`) | Ergebnis («Reviewed commit») |
+|---|---|---|
+| `#69`, 30.8.2026 | `85658be` — Head des Branches | `21a32246a4` — Merge-Commit, Review-Objekt |
+| `#75`, 23.9.2026 | `c0bb12b` — Head des Branches | `e78ca3bb3c` — Merge-Commit, Befundlos-Meldung |
 
-Praktisch heisst das: den geprüften Commit **aus dem Statusbericht lesen**,
-nicht voraussetzen. Stand die Basis seit der Abzweigung still, ist es
-gleichgültig — auf `#75` haben `e78ca3b` und `c0bb12b` denselben Baum
-(`957a729`). Ist die Basis dagegen weitergelaufen, prüft ein Lauf auf dem Head
-nicht den Code, der jetzt auf `main` liegt.
+Zweimal dasselbe Muster, einmal mit und einmal ohne Befund. Nach dem Merge
+**widersprechen sich die beiden Anker** aus dem Abschnitt «Nennt das jüngste
+Codex-Ergebnis den aktuellen Head»: Die Spalte im Statusbericht scheint den
+Head des PR zu nennen, nicht das, was der Lauf tatsächlich las. Welcher der
+beiden stimmt, ist von aussen nicht zu entscheiden — auf `#75` haben beide
+Commits denselben Baum (`957a729`), dort ist es gleichgültig. Ist die Basis
+seit der Abzweigung weitergelaufen, ist es das nicht mehr.
 
-Übrig bleibt der Statusbericht. Er nennt den geprüften Commit — der Head wurde
-also geprüft —, sagt aber nichts über den Ausgang. **Der Ausgang ist in diesem
+Deshalb gilt nach dem Merge die Reihenfolge der Anker **umgekehrt**: das
+Ergebnis zuerst, der Statusbericht nur, wenn keines kommt. Ob der
+Statusbericht auch *vor* dem Merge je etwas anderes nennt als den gelesenen
+Commit, ist nicht gemessen; beobachtet ist dort kein Unterschied.
+
+(Der erste Entwurf dieses Nachtrags, PR `#76`, behauptete das Gegenteil —
+«auf `#75` prüfte der Lauf den Head, nicht den Merge-Commit» —, gelesen allein
+am Statusbericht, zwei Minuten bevor das Ergebnis kam. Genau der Fehler, den
+diese Zeilen beschreiben.)
+
+Übrig bleibt der Statusbericht. Er nennt `34021a9`, den Head — was nach der
+Tabelle oben nicht heisst, dass der Lauf den Head las: Er startete eine Sekunde
+nach dem Merge, und auf `#69` und `#75` las ein Lauf nach dem Merge den
+Merge-Commit. Über den Ausgang sagt der Bericht ohnehin nichts. **Der Ausgang ist in diesem
 Fall von aussen nicht feststellbar.**
 
 Naheliegend wäre, ihn aus der 👍-Reaktion am PR zu lesen. Das trägt nicht:
@@ -446,8 +458,9 @@ weiter unten, wo derselbe Text in 42 Läufen 36-mal einen Befund und 6-mal keine
 bekam. Was bleibt, ist ein Ersatz, keine Rekonstruktion: eine frische Prüfung
 auf dem Merge-Commit oder in einem Folge-PR, deren Ergebnis für sich steht.
 
-Ein Statusbericht ohne Ergebnis heisst also «geprüft, Ausgang unbekannt» — und
-das ist eine ehrlichere Auskunft als eine Summe, die zwei Urheber nicht trennt.
+Ein Statusbericht ohne Ergebnis heisst also «ein Lauf fand statt; auf welchem
+Stand und mit welchem Ausgang, ist unbekannt» — und das ist eine ehrlichere
+Auskunft als eine Summe, die zwei Urheber nicht trennt.
 
 Das sind verschiedene Abfragen — `get_reviews` fürs Objekt, `get_comments` für
 die PR-Kommentare, `get_review_comments` für die Threads; wer nur eine nimmt,
