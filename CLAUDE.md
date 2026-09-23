@@ -362,13 +362,19 @@ Zwei Anker, in dieser Reihenfolge:
    und ist das einzige Objekt, das beide Ausgänge gleich behandelt. Stimmt der
    Commit mit dem Head, ist der Head geprüft — geprüft, nicht notwendig sauber:
    Den Ausgang nennt der Bericht nicht.
-   **Nach dem Merge nicht:** Dort nennt der Bericht den Head des PR, das
-   Ergebnis den Merge-Commit, und welcher den gelesenen Inhalt bezeichnet, ist
-   offen — weiter unten, bei den Läufen nach dem Merge.
 2. **Fehlt der Bericht**, trägt jedes Codex-Ergebnis seinen Commit selbst — das
    Review-Objekt wie die Befundlos-Meldung, beide als «Reviewed commit». Dann
    das **jüngste** von beiden nehmen und dessen Commit vergleichen; das ältere
    sagt nichts über den Head.
+
+**Beide Anker gelten nur für Läufe vor dem Merge.** Nach dem Merge nennt der
+Bericht den Head des PR, das Ergebnis den Merge-Commit, und welcher den
+gelesenen Inhalt bezeichnet, ist offen (weiter unten, bei den Läufen nach dem
+Merge). Dann trägt keiner allein, auch nicht der, der übrig bleibt, wenn der
+andere fehlt: Ein Anker kann einen Inhalt beschriften, den der Lauf vom
+anderen Commit las. Als geprüft gilt ein Lauf nach dem Merge nur, wenn Head
+und Merge-Commit **denselben Baum** haben (`git rev-parse <commit>^{tree}`),
+oder wenn die Änderung in einem Folge-PR vor dessen Merge geprüft wird.
 
 Was in keinem Fall trägt: die blosse Anwesenheit eines Review-Objekts oder
 einer Befundlos-Meldung, ohne den Commit darin zu lesen.
@@ -428,10 +434,12 @@ sind mit beidem verträglich.
 Keinen Anker vorziehen, solange das offen ist. Wer bei einem künftigen Merge,
 dessen Basis weitergelaufen ist, dem Ergebnis folgt, erklärt womöglich
 Änderungen für geprüft, die nur im Merge-Commit stehen; wer dem Statusbericht
-folgt, macht denselben Fehler andersherum. Nennen die beiden Anker
-verschiedene Commits **mit verschiedenem Baum**, gilt der Stand als
-**ungeprüft**, bis ein Lauf genau diesen Fall aufklärt — `git rev-parse
-<commit>^{tree}` für beide trennt die zwei Lagen in einer Zeile. Ob der
+folgt, macht denselben Fehler andersherum. Haben Head und Merge-Commit
+**verschiedene Bäume**, gilt der Stand als **ungeprüft** — gleich, welcher
+Anker vorliegt und ob der andere fehlt —, bis ein Lauf genau diesen Fall
+aufklärt oder ein Folge-PR die Änderung vor seinem Merge prüfen lässt.
+`git rev-parse <commit>^{tree}` für beide trennt die zwei Lagen in einer
+Zeile. Ob der
 Statusbericht auch *vor* dem Merge je etwas anderes nennt als das Ergebnis,
 ist nicht gemessen; beobachtet ist dort kein Unterschied.
 
