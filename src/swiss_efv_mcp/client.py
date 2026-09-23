@@ -496,6 +496,24 @@ def to_year(value: str | None) -> int | None:
 # exactly like a verified one and would quietly claim a coverage nobody
 # measured. The vocabulary test names the next unmapped label the day it
 # appears, which is the honest way to learn the rest.
+#
+# THE 2026-09-22 REPUBLISH
+# ------------------------
+# It did, on 2026-09-22 (Last-Modified 08:54:56 UTC): the Bund's forward years
+# are back, and with them three labels no earlier file had carried. Each was
+# classified from the rows it sits on, not from its wording — counted against
+# the live file on 2026-09-23:
+#
+#   `Budget/Finanzpläne`  207 rows, `bund` 2027-2030 and `sv` 2026-2030
+#   `Hochrechnung`         23 rows, `bund` 2026 only
+#   `Umfrage Budget`       23 rows, `ktn` 2026 only
+#
+# All three sit on 2026 or later, where every household's `Rechnung` stops at
+# 2025, and no (hh, model, variable, jahr) carries two labels. 2026 is the
+# running year, so an extrapolation (`Hochrechnung`) of it is forward-looking
+# as much as a budget is. The first and third also have an English twin in the
+# set already (`Budget/financial plans`, `Survey budget`); that agrees with
+# the classification, it is not the reason for it.
 _PROJECTION_SOURCES = {
     # English, as published up to 2026-08-27
     "Budget/financial plans",
@@ -503,6 +521,10 @@ _PROJECTION_SOURCES = {
     "Survey budget",
     # German, as published since 2026-08-27
     "Prognosen",
+    # German, first published 2026-09-22 (see THE 2026-09-22 REPUBLISH)
+    "Budget/Finanzpläne",
+    "Hochrechnung",
+    "Umfrage Budget",
 }
 _ACTUAL_SOURCES = {
     # English, as published up to 2026-08-27
