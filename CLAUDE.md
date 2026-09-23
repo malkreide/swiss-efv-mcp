@@ -404,9 +404,24 @@ trotzdem. «Es läuft noch nichts» ist also kein sicheres Zeichen. Ob ein Merge
 sichergehen will, wartet nicht auf den Start, sondern auf das Ergebnis.
 
 Praktisch ist das die gute Nachricht des Abschnitts: Der Ersatz, den er unten
-empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft, und der
-geprüfte Commit ist dann der **Merge-Commit** (`21a3224`), nicht der Head des
-gemergten Branches.
+empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft. **Welchen
+Commit** er prüft, ist dagegen keine Regel: Auf `#69` war es der
+**Merge-Commit** (`21a3224`), nicht der Head des gemergten Branches. Am
+23.9.2026 auf `#75` war es umgekehrt — Merge um 16:42:31 als `e78ca3b`,
+«@codex review» um 16:47, der Statusbericht um 16:47:25 nannte `c0bb12b`, den
+Head des Branches, Auslöser «Manual request».
+
+Was die beiden trennt, ist nicht gemessen. Offen liegt ein Unterschied: Auf
+`#69` kam der Anstoss 1 h 46 min nach dem Merge, auf `#75` fünf Minuten danach.
+Ob das der Grund ist, geben zwei Beobachtungen nicht her. Den Zustand des
+Branches taugt nicht als Erklärung, soweit gemessen: Beide sind heute gelöscht,
+und wann der von `#75` verschwand, ist nicht festgehalten.
+
+Praktisch heisst das: den geprüften Commit **aus dem Statusbericht lesen**,
+nicht voraussetzen. Stand die Basis seit der Abzweigung still, ist es
+gleichgültig — auf `#75` haben `e78ca3b` und `c0bb12b` denselben Baum
+(`957a729`). Ist die Basis dagegen weitergelaufen, prüft ein Lauf auf dem Head
+nicht den Code, der jetzt auf `main` liegt.
 
 Übrig bleibt der Statusbericht. Er nennt den geprüften Commit — der Head wurde
 also geprüft —, sagt aber nichts über den Ausgang. **Der Ausgang ist in diesem
