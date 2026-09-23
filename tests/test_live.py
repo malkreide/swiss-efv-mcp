@@ -149,6 +149,11 @@ async def test_live_headline_saldo_is_classified_and_current(client):
     moved to `test_live_projections_survive_into_the_tool`, which asks the dump
     where forward years actually live instead of naming a household, and the
     horizon claim became the staleness floor below.
+
+    On 2026-09-22 the EFV put them back — `Hochrechnung` for 2026,
+    `Budget/Finanzpläne` for 2027-2030 — under two labels nobody had mapped,
+    and this test went red on the assertion below. That is the case for keeping
+    it: the series is only "fully classified" if the forward years are too.
     """
     res = await headline_impl(client, variable="saldo", household="bund", model="fs")
     assert len(res.points) > 20

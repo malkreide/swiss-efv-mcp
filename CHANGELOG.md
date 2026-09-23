@@ -71,6 +71,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Behoben
 
+- **Drei neue `source`-Marken der EFV.** Am 22.9.2026 (Last-Modified 08:54:56
+  UTC) veröffentlichte die EFV `main_extern.csv` neu, mit den Planjahren des
+  Bundes zurück in der Datei und drei Marken, die keine frühere Fassung trug:
+  `Budget/Finanzpläne` (207 Zeilen, `bund` 2027–2030, `sv` 2026–2030),
+  `Hochrechnung` (23, `bund` 2026) und `Umfrage Budget` (23, `ktn` 2026).
+  `is_projection` gab für sie `None` zurück, `fiscal_headline` kennzeichnete
+  die Jahre 2026–2030 des Bundes nicht als Prognose. Gemeldet hat es der
+  Live-Wächter `test_live_source_vocabulary_is_fully_mapped` mit allen drei
+  Namen (Lauf vom 23.9.2026, der zweite rote in Folge).
+
+  Alle drei gelten jetzt als vorausschauend — eingeordnet nach den Zeilen,
+  auf denen sie stehen, nicht nach dem Wortlaut: nur 2026 und später, während
+  `Rechnung` überall 2025 endet, und kein Schlüssel trägt zwei Marken.
+
 - **`serverInfo.version` meldete die Version von FastMCP statt der eigenen.**
   Ohne `version=` im `FastMCP`-Konstruktor fällt FastMCP auf seine eigene
   Distributionsversion zurück: gemessen am 18.9.2026 meldete dieser Server

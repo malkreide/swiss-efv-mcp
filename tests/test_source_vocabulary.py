@@ -16,7 +16,11 @@ Diese Datei haelt beide Wortschaetze fest. Der englische ist kein Ballast: Die
 Aufzeichnung vom 14.8.2026 traegt ihn noch, und eine Quelle, die einmal die
 Sprache gewechselt hat, kann zurueckwechseln.
 
-Was hier **nicht** steht, ist ebenso Absicht. Fuer vier der englischen Marken
+Am 22.9.2026 kamen mit den Planjahren des Bundes drei weitere deutsche Marken
+dazu (`Budget/Finanzpläne`, `Hochrechnung`, `Umfrage Budget`) — gemeldet vom
+Live-Waechter in der Nacht danach, genau wie vorgesehen.
+
+Was hier **nicht** steht, ist ebenso Absicht. Fuer zwei der englischen Marken
 ist die deutsche Entsprechung heute nicht in der Datei; sie wird deshalb auch
 nicht erfunden. Ein ausgedachter String sieht aus wie ein gemessener und
 behauptet eine Abdeckung, die niemand geprueft hat. Die naechste unbekannte
@@ -45,7 +49,16 @@ from swiss_efv_mcp.server import headline_impl
 #
 # Die Zahlen stehen als Datum der Messung dabei, nicht als Zusicherung: Ein
 # Bestand gehoert in einen Live-Test, nicht in einen Unit-Test.
-DEUTSCH_VORAUSSCHAUEND = ["Prognosen"]
+#
+# Am 22.9.2026 (Last-Modified 08:54:56 UTC) kamen drei Marken dazu, gemessen am
+# 23.9.2026 (462'362 B). Eingeordnet nach den Zeilen, auf denen sie stehen: alle
+# drei nur auf 2026 und spaeter, waehrend `Rechnung` ueberall 2025 endet, und
+# kein Schluessel (hh, model, variable, jahr) traegt zwei Marken.
+#
+#     Budget/Finanzpläne  207 Zeilen   bund 2027-2030, sv 2026-2030
+#     Hochrechnung         23          bund 2026
+#     Umfrage Budget       23          ktn 2026
+DEUTSCH_VORAUSSCHAUEND = ["Prognosen", "Budget/Finanzpläne", "Hochrechnung", "Umfrage Budget"]
 DEUTSCH_ABGESCHLOSSEN = ["Rechnung", "Vorhandene Daten"]
 
 # Der Wortschatz bis zum 27.8.2026, belegt durch `tests/fixtures/headline.csv`
