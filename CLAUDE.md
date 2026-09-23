@@ -363,7 +363,8 @@ Zwei Anker, in dieser Reihenfolge:
    Commit mit dem Head, ist der Head geprüft — geprüft, nicht notwendig sauber:
    Den Ausgang nennt der Bericht nicht.
    **Nach dem Merge nicht:** Dort nennt der Bericht den Head des PR, das
-   Ergebnis den Merge-Commit — weiter unten, bei den Läufen nach dem Merge.
+   Ergebnis den Merge-Commit, und welcher den gelesenen Inhalt bezeichnet, ist
+   offen — weiter unten, bei den Läufen nach dem Merge.
 2. **Fehlt der Bericht**, trägt jedes Codex-Ergebnis seinen Commit selbst — das
    Review-Objekt wie die Befundlos-Meldung, beide als «Reviewed commit». Dann
    das **jüngste** von beiden nehmen und dessen Commit vergleichen; das ältere
@@ -406,9 +407,9 @@ trotzdem. «Es läuft noch nichts» ist also kein sicheres Zeichen. Ob ein Merge
 sichergehen will, wartet nicht auf den Start, sondern auf das Ergebnis.
 
 Praktisch ist das die gute Nachricht des Abschnitts: Der Ersatz, den er unten
-empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft, und der
-geprüfte Commit ist dann der **Merge-Commit** — laut Ergebnis. Der
-Statusbericht nennt dabei einen anderen:
+empfiehlt, ist fahrbar. «@codex review» auf dem gemergten PR läuft, und sein
+Ergebnis nennt dann den **Merge-Commit**. Der Statusbericht nennt dabei einen
+anderen:
 
 | PR | Statusbericht (`✅ Completed`) | Ergebnis («Reviewed commit») |
 |---|---|---|
@@ -416,28 +417,36 @@ Statusbericht nennt dabei einen anderen:
 | `#75`, 23.9.2026 | `c0bb12b` — Head des Branches | `e78ca3bb3c` — Merge-Commit, Befundlos-Meldung |
 
 Zweimal dasselbe Muster, einmal mit und einmal ohne Befund. Nach dem Merge
-**widersprechen sich die beiden Anker** aus dem Abschnitt «Nennt das jüngste
-Codex-Ergebnis den aktuellen Head»: Die Spalte im Statusbericht scheint den
-Head des PR zu nennen, nicht das, was der Lauf tatsächlich las. Welcher der
-beiden stimmt, ist von aussen nicht zu entscheiden — auf `#75` haben beide
-Commits denselben Baum (`957a729`), dort ist es gleichgültig. Ist die Basis
-seit der Abzweigung weitergelaufen, ist es das nicht mehr.
+**nennen die beiden Anker** aus dem Abschnitt «Nennt das jüngste
+Codex-Ergebnis den aktuellen Head» **verschiedene Commits**. Welcher davon den
+gelesenen Inhalt bezeichnet, geben die beiden Fälle nicht her: In beiden haben
+Head und Merge-Commit **denselben Baum** — `c0bb12b` und `e78ca3b` den Baum
+`957a729`, `85658be` und `21a3224` den Baum `1af83d0`. Der Lauf kann den einen
+gelesen und den anderen nur beschriftet haben, in beide Richtungen; die Daten
+sind mit beidem verträglich.
 
-Deshalb gilt nach dem Merge die Reihenfolge der Anker **umgekehrt**: das
-Ergebnis zuerst, der Statusbericht nur, wenn keines kommt. Ob der
-Statusbericht auch *vor* dem Merge je etwas anderes nennt als den gelesenen
-Commit, ist nicht gemessen; beobachtet ist dort kein Unterschied.
+Keinen Anker vorziehen, solange das offen ist. Wer bei einem künftigen Merge,
+dessen Basis weitergelaufen ist, dem Ergebnis folgt, erklärt womöglich
+Änderungen für geprüft, die nur im Merge-Commit stehen; wer dem Statusbericht
+folgt, macht denselben Fehler andersherum. Nennen die beiden Anker
+verschiedene Commits **mit verschiedenem Baum**, gilt der Stand als
+**ungeprüft**, bis ein Lauf genau diesen Fall aufklärt — `git rev-parse
+<commit>^{tree}` für beide trennt die zwei Lagen in einer Zeile. Ob der
+Statusbericht auch *vor* dem Merge je etwas anderes nennt als das Ergebnis,
+ist nicht gemessen; beobachtet ist dort kein Unterschied.
 
-(Der erste Entwurf dieses Nachtrags, PR `#76`, behauptete das Gegenteil —
-«auf `#75` prüfte der Lauf den Head, nicht den Merge-Commit» —, gelesen allein
-am Statusbericht, zwei Minuten bevor das Ergebnis kam. Genau der Fehler, den
-diese Zeilen beschreiben.)
+(Der erste Entwurf dieses Nachtrags, PR `#76`, behauptete «auf `#75` prüfte
+der Lauf den Head, nicht den Merge-Commit» — gelesen allein am Statusbericht,
+zwei Minuten bevor das Ergebnis kam. Der zweite drehte es um und liess das
+Ergebnis vorgehen, gestützt auf dieselben zwei Fälle; ein Codex-Review wies
+nach, dass beide Fälle gleiche Bäume haben und damit gar nichts entscheiden.
+Zweimal eine Beschriftung für eine Messung gehalten.)
 
 Übrig bleibt der Statusbericht. Er nennt `34021a9`, den Head — was nach der
 Tabelle oben nicht heisst, dass der Lauf den Head las: Er startete eine Sekunde
-nach dem Merge, und auf `#69` und `#75` las ein Lauf nach dem Merge den
-Merge-Commit. Über den Ausgang sagt der Bericht ohnehin nichts. **Der Ausgang ist in diesem
-Fall von aussen nicht feststellbar.**
+nach dem Merge, und nach dem Merge ist offen, welchen Commit die Spalte im
+Bericht bezeichnet. Über den Ausgang sagt der Bericht ohnehin nichts. **Der
+Ausgang ist in diesem Fall von aussen nicht feststellbar.**
 
 Naheliegend wäre, ihn aus der 👍-Reaktion am PR zu lesen. Das trägt nicht:
 
