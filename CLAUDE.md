@@ -285,10 +285,11 @@ wie der Code: Nichts ist rot, weil nichts geprüft wird, worauf es ankommt.
 
 ## Dieses Repo
 
-**ruff:** genau eine Quelle — `ruff==0.16.3` im `dev`-Extra von
-`pyproject.toml`. `pip install -e ".[dev]"` reicht also, lokal wie in der CI.
-Keine zweite Version in die Workflows schreiben: ein solcher Schritt läuft
-nach dem dev-Install und überstimmt den Pin still (`ci.yml` hatte einen;
+**ruff:** genau eine Quelle — der exakte `ruff==`-Pin im `dev`-Extra von
+`pyproject.toml`; die Version dort nachlesen, nicht hier.
+`pip install -e ".[dev]"` reicht also, lokal wie in der CI. Keine zweite
+Version in die Workflows schreiben: ein solcher Schritt läuft nach dem
+dev-Install und überstimmt den Pin still (`ci.yml` hatte einen;
 `test_werkzeug_versionen.py` hält beides fest). Ein `.pre-commit-config.yaml`
 gibt es nicht.
 
