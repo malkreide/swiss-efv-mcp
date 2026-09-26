@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
-"""Faehrt die JS-Tests von `scripts/live_issue.cjs` im bestehenden pytest-Gate.
+"""Faehrt die JS-Suiten unter `scripts/` im bestehenden pytest-Gate.
 
-Der Entscheidungsbaum des Live-Workflows ist JavaScript — `actions/github-script`
-laedt ihn. Seine Tests liegen deshalb in `scripts/live_issue.test.mjs` und
-laufen unter `node:test`. Damit sie niemand vergisst, ruft dieser Wrapper sie
-mit: keine zweite Zeile in `ci.yml`, kein sechstes Gate, das man kennen muss.
+Die Entscheidungsbaeume der geplanten Workflows sind JavaScript —
+`actions/github-script` laedt sie. Ihre Tests liegen deshalb neben ihnen als
+`*.test.mjs` und laufen unter `node:test`. Damit sie niemand vergisst, ruft
+dieser Wrapper sie mit: keine zweite Zeile in `ci.yml`, kein sechstes Gate,
+das man kennen muss.
+
+WARUM PER GLOB UND NICHT PER LISTE
+
+Diese Datei hiess bis zum 26.9.2026 `test_live_issue.py` und kannte genau eine
+Suite. Als `nightly_issue.test.mjs` dazukam, waren zwei Wege offen: die Datei
+kopieren oder sie oeffnen. Kopieren haette den Harness verdoppelt — samt der
+Zaehlung unten, die eine echte Falle abdeckt, und damit samt der Moeglichkeit,
+dass die beiden Kopien auseinanderlaufen. Dieselbe Konstruktion, an der hier
+schon der ruff-Pin gescheitert ist.
+
+Der Glob hat zusaetzlich die Eigenschaft, die eine Liste nicht hat: Die
+naechste Suite laeuft mit, ohne dass jemand daran denkt.
 
 WARUM DIE TESTS GEZAEHLT WERDEN
 
@@ -37,17 +50,16 @@ from pathlib import Path
 import pytest
 
 _ROOT = Path(__file__).resolve().parents[1]
-_SUITE = _ROOT / "scripts" / "live_issue.test.mjs"
-
-# Ein Ordner-Argument (`node --test scripts/`) laesst Node den Ordner als Modul
-# aufloesen und mit MODULE_NOT_FOUND scheitern, gemessen an Node 22.22. Die
-# Datei wird deshalb einzeln benannt.
-_BEFEHL = ["--test", str(_SUITE)]
+_SCRIPTS = _ROOT / "scripts"
 
 # In der CI ist Node auf `ubuntu-latest` immer da. Faellt der Test dort auf
 # «uebersprungen» zurueck, waere das genau der stille Erfolg, den dieses Repo
 # schon einmal geprueft und verworfen hat.
 _IN_CI = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+
+
+def _suiten() -> list[Path]:
+    return sorted(_SCRIPTS.glob("*.test.mjs"))
 
 
 def _node() -> str | None:
@@ -64,30 +76,40 @@ def _bilanz(ausgabe: str) -> dict[str, int]:
     return gefunden
 
 
-def _deklarierte_tests() -> int:
+def _deklarierte_tests(suite: Path) -> int:
     """`test('…')`-Aufrufe am Zeilenanfang der Suite.
 
     Die Gegenzahl zur TAP-Bilanz: Nur wenn beide gleich sind, ist jeder
     geschriebene Fall auch gelaufen.
     """
-    return len(re.findall(r"^test\(", _SUITE.read_text(encoding="utf-8"), re.MULTILINE))
+    return len(re.findall(r"^test\(", suite.read_text(encoding="utf-8"), re.MULTILINE))
 
 
-def test_node_ist_in_der_ci_vorhanden():
+def test_es_gibt_ueberhaupt_suiten() -> None:
+    """Der Glob koennte leer laufen — dann pruefte diese Datei nichts mehr,
+    und die Parametrisierung darunter erzeugte schlicht keinen Test."""
+    assert _suiten(), f"keine *.test.mjs unter {_SCRIPTS}"
+
+
+def test_node_ist_in_der_ci_vorhanden() -> None:
     """Sonst wuerde der eigentliche Test still uebersprungen."""
     if not _IN_CI:
         pytest.skip("nur in der CI: lokal darf Node fehlen")
     assert _node(), "Node fehlt in der CI — die JS-Tests liefen nicht"
 
 
-def test_der_entscheidungsbaum_haelt():
+@pytest.mark.parametrize("suite", _suiten(), ids=lambda p: p.name)
+def test_der_entscheidungsbaum_haelt(suite: Path) -> None:
     node = _node()
     if not node:
         pytest.skip("node nicht im PATH — `test_node_ist_in_der_ci_vorhanden` deckt die CI ab")
-    assert _SUITE.is_file(), f"{_SUITE} fehlt"
+    assert suite.is_file(), f"{suite} fehlt"
 
     lauf = subprocess.run(  # noqa: S603 — fester Befehl, kein fremder Text
-        [node, *_BEFEHL],
+        # Ein Ordner-Argument (`node --test scripts/`) laesst Node den Ordner
+        # als Modul aufloesen und mit MODULE_NOT_FOUND scheitern, gemessen an
+        # Node 22.22. Die Datei wird deshalb einzeln benannt.
+        [node, "--test", str(suite)],
         cwd=_ROOT,
         capture_output=True,
         text=True,
@@ -101,10 +123,10 @@ def test_der_entscheidungsbaum_haelt():
     assert bilanz.get("fail", 0) == 0, f"JS-Tests rot:\n{ausgabe[-4000:]}"
     assert bilanz.get("skipped", 0) == 0, f"JS-Tests uebersprungen:\n{ausgabe[-2000:]}"
 
-    deklariert = _deklarierte_tests()
-    assert deklariert > 0, f"{_SUITE.name} deklariert keinen Test mehr"
+    deklariert = _deklarierte_tests(suite)
+    assert deklariert > 0, f"{suite.name} deklariert keinen Test mehr"
     assert bilanz.get("pass") == deklariert, (
-        f"{deklariert} Test(s) in {_SUITE.name} deklariert, aber {bilanz.get('pass')} "
+        f"{deklariert} Test(s) in {suite.name} deklariert, aber {bilanz.get('pass')} "
         f"bestanden — eine Datei ohne Tests meldet `# pass 1`, ohne etwas zu pruefen:"
         f"\n{ausgabe[-2000:]}"
     )

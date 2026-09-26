@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Hinzugefügt
+
+- **Die fünf Offline-Gates laufen jetzt auch nachts** (`.github/workflows/nightly.yml`,
+  cron `41 3 * * *`). `ci.yml` läuft bei Push und Pull Request; eine Codebasis,
+  die niemand anfasst, wurde damit nie wieder geprüft — und kann trotzdem
+  kaputtgehen, weil jede Abhängigkeit mit offener Untergrenze bei der nächsten
+  frischen Installation etwas anderes auflöst.
+
+  Genau das ist passiert: `fastmcp>=3.4` löste am 18.9.2026 zu fastmcp 4 auf,
+  vier Gates fielen, und der letzte grüne Lauf auf `main` stammte vom 30.8. —
+  **drei Wochen latent rot**, ohne dass ein Commit die Ursache trug und ohne
+  dass es jemand sah, weil in dieser Zeit niemand gepusht hat. `live.yml` fängt
+  das nicht: es prüft die Datenquelle, nicht die Gates.
+
+  Der Workflow enthält die Gates **nicht selbst**, sondern ruft `ci.yml` per
+  `workflow_call` auf. Zwei Listen, die sich stumm einigen müssen, sind eine zu
+  viel — dieselbe Konstruktion, an der hier schon der ruff-Pin gescheitert ist.
+  Ein nächtliches Gate, das eine andere Version fährt als das im PR, ist
+  schlimmer als keines: es sieht nach Deckung aus.
+  `tests/test_nightly_gates.py` fällt an dem Tag, an dem jemand die Schritte
+  hineinkopiert — auch dann, wenn beide Kopien in dem Moment dasselbe sagen.
+
+- **`scripts/nightly_issue.cjs`** meldet den Befund als Issue: öffnen,
+  kommentieren, schliessen. Ein grüner Lauf schliesst den Thread von selbst,
+  ein einzelner Aussetzer des Index heilt also über Nacht. **Drei Zustände,
+  nicht zwei:** ein abgebrochener Lauf (`cancelled`) hat die Gates nicht
+  gefahren und sagt nichts über den Branch — er öffnet nichts und schliesst
+  nichts. Das ist der Zustand, an dem `if: failure()` scheitert.
+
+### Geändert
+
+- **`tests/test_live_issue.py` heisst jetzt `tests/test_js_suiten.py`** und
+  findet die JS-Suiten per Glob statt eine einzelne beim Namen zu nennen. Als
+  die zweite Suite dazukam, waren zwei Wege offen: den Harness kopieren oder
+  ihn öffnen. Kopieren hätte die Zählung mitverdoppelt, die eine echte Falle
+  abdeckt (eine Datei ohne Test meldet unter `node --test` genau
+  `# pass 1`) — und damit die Möglichkeit, dass die Kopien auseinanderlaufen.
+  Der Glob nimmt die nächste Suite ausserdem mit, ohne dass jemand daran denkt.
+
+- **`ci.yml` hat einen `workflow_call`-Auslöser**, damit `nightly.yml` es
+  aufrufen kann. An den Gates selbst ändert sich nichts.
+
 ## [0.4.0] - 2026-09-26
 
 ### Geändert

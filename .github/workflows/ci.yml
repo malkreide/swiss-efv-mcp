@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Der naechtliche Lauf ruft diesen Workflow auf, statt die fuenf Gates ein
+  # zweites Mal hinzuschreiben (`nightly.yml`). Zwei Kopien muessten sich
+  # stumm einigen, und genau daran ist hier schon einmal der ruff-Pin
+  # gescheitert: `ci.yml` installierte eine eigene Version, die nach dem
+  # dev-Install lief und pyproject ueberstimmte, ohne dass etwas rot wurde
+  # (`test_werkzeug_versionen.py`). Eine Definition, zwei Ausloeser.
+  workflow_call: {}
 
 jobs:
   test:
