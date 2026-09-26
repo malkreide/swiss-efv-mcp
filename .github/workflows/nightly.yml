@@ -1,0 +1,95 @@
+# Die fuenf Offline-Gates, naechtlich auf dem Default-Branch.
+#
+# WARUM ES DIESEN WORKFLOW GIBT
+# -----------------------------
+# `ci.yml` laeuft bei Push und Pull Request. Eine Codebasis, die niemand
+# anfasst, wird damit nie wieder geprueft — und kann trotzdem kaputtgehen:
+# jede Abhaengigkeit mit offener Untergrenze loest bei der naechsten frischen
+# Installation etwas anderes auf als beim letzten Lauf.
+#
+# Genau das ist passiert. `fastmcp>=3.4` loeste am 18.9.2026 zu fastmcp 4 auf,
+# das `mcp` 2.x mitbringt; vier Gates fielen. Der letzte gruene Lauf auf `main`
+# stammte vom 30.8. — der Branch war **drei Wochen latent rot**, ohne dass ein
+# Commit die Ursache trug und ohne dass es jemand sah, weil in dieser Zeit
+# niemand gepusht hat.
+#
+# `live.yml` faengt das nicht: es prueft die Datenquelle, nicht die Gates.
+#
+# WARUM ER DIE GATES NICHT SELBST ENTHAELT
+# ----------------------------------------
+# Er ruft `ci.yml` per `workflow_call` auf. Die fuenf Gates hier ein zweites
+# Mal hinzuschreiben hiesse, zwei Listen zu fuehren, die sich stumm einigen
+# muessen — dieselbe Konstruktion, an der hier schon der ruff-Pin gescheitert
+# ist (`test_werkzeug_versionen.py`). Ein Gate, das nachts eine andere Version
+# faehrt als im PR, ist schlimmer als keines: es sieht nach Deckung aus.
+# `tests/test_nightly_gates.py` haelt das fest.
+#
+# Achtung: `schedule` greift nur auf dem Default-Branch. Aenderungen an dieser
+# Datei werden erst nach dem Merge wirksam. Vorher per `workflow_dispatch`
+# von Hand ausloesen.
+
+name: Nightly gates
+
+on:
+  schedule:
+    # Zwei Stunden vor der Live-Suite (`27 5 * * *`), damit ein roter Morgen
+    # zuerst sagt, ob die Gates oder die Quelle das Problem sind. Krumme
+    # Minute mit Absicht: zur vollen Stunde staut sich die Warteschlange.
+    - cron: "41 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-gates
+  cancel-in-progress: false
+
+jobs:
+  gates:
+    name: Gates
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  melden:
+    name: Befund melden
+    needs: gates
+    # `always()`, sonst liefe dieser Job bei rotem `gates` gar nicht erst —
+    # also genau dann nicht, wenn er gebraucht wird.
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Issue oeffnen, kommentieren oder schliessen
+        uses: actions/github-script@v9
+        # Ueber `env`, nicht ueber `${{ }}` im Skript: dieselbe Vorsicht wie in
+        # `live.yml`. Hier ist der Wert zwar ein enger Satz von Job-Ergebnissen,
+        # aber die Regel «fremder Text nie in ein Template-Literal» kostet
+        # nichts und ueberlebt den naechsten Umbau.
+        env:
+          GATES_RESULT: ${{ needs.gates.result }}
+        with:
+          # Der Entscheidungsbaum steht in `scripts/nightly_issue.cjs`, nicht
+          # hier: Was etwas entscheidet, gehoert nicht an die einzige Stelle,
+          # an der es niemand ausfuehren kann. `nightly_issue.test.mjs` faehrt
+          # alle Pfade, angestossen von `tests/test_js_suiten.py`.
+          script: |
+            const handler = require(`${process.env.GITHUB_WORKSPACE}/scripts/nightly_issue.cjs`);
+            const getan = await handler({ github, context, core, env: process.env });
+            core.info(`Am Issue getan: ${getan}`);
+
+      # Der Job selbst wird rot, wenn die Gates rot waren — sonst faerbte ein
+      # erfolgreich geschriebenes Issue den Lauf gruen, und die Lauf-Historie
+      # loege ueber den Zustand des Branches.
+      - name: Ergebnis durchreichen
+        if: needs.gates.result != 'success'
+        env:
+          GATES_RESULT: ${{ needs.gates.result }}
+        run: |
+          echo "Gates: $GATES_RESULT"
+          exit 1

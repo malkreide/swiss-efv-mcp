@@ -10,7 +10,7 @@
  * sondern ob ueberhaupt einer haette abgehen duerfen.
  *
  * `node:test` aus der Standardbibliothek, keine Abhaengigkeit. Laeuft ueber
- * `tests/test_live_issue.py` im bestehenden pytest-Gate mit, oder direkt:
+ * `tests/test_js_suiten.py` im bestehenden pytest-Gate mit, oder direkt:
  *     node --test scripts/live_issue.test.mjs
  *
  * Die Datei wird einzeln benannt, nicht als Verzeichnis: `node --test scripts/`

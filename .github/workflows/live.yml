@@ -117,7 +117,7 @@ jobs:
           # Vier Verzweigungen, jede mit Folgen fuer einen Thread, den Menschen
           # lesen — die gehoeren nicht an die einzige Stelle, an der sie niemand
           # ausfuehren kann. `scripts/live_issue.test.mjs` faehrt alle vier,
-          # angestossen von `tests/test_live_issue.py` im pytest-Gate.
+          # angestossen von `tests/test_js_suiten.py` im pytest-Gate.
           script: |
             const handler = require(`${process.env.GITHUB_WORKSPACE}/scripts/live_issue.cjs`);
             const getan = await handler({ github, context, core, env: process.env });
