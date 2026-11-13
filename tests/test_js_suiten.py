@@ -27,6 +27,11 @@ Datei ohne einen einzigen `test(...)`-Aufruf meldet unter `node --test` genau
 Node 22.22, und zwar erst in der Gegenprobe: Die Suite wurde durch einen
 Kommentar ersetzt, und dieser Wrapper blieb gruen.
 
+Die Zahlen kommen aus der TAP-Bilanz, und TAP wird deshalb ausdruecklich
+verlangt (`--test-reporter=tap`, Begruendung am Aufruf unten). Ohne die Angabe
+haengt das Format an der Node-Version des Runners — und die wechselt mit dem
+Image, nicht mit diesem Repo.
+
 Das ist dieselbe Falle wie die uebersprungene Live-Suite, nur eine Ebene
 tiefer — ein Erfolg, der nichts geprueft hat. Deshalb wird die Zahl der
 bestandenen Tests gegen die Zahl der in der Suite deklarierten gehalten. Sie
@@ -109,7 +114,14 @@ def test_der_entscheidungsbaum_haelt(suite: Path) -> None:
         # Ein Ordner-Argument (`node --test scripts/`) laesst Node den Ordner
         # als Modul aufloesen und mit MODULE_NOT_FOUND scheitern, gemessen an
         # Node 22.22. Die Datei wird deshalb einzeln benannt.
-        [node, "--test", str(suite)],
+        #
+        # Der Reporter steht ausdruecklich da, weil `_bilanz` TAP liest und
+        # TAP seit Node 23 nicht mehr die Vorgabe ist. Node 22 schrieb ohne
+        # Terminal TAP (`# tests 9`), Node 24 schreibt «spec» (`ℹ tests 9`).
+        # Am 8.11.2026 stellte `ubuntu-latest` von Ubuntu 24.04 (Node 22.23)
+        # auf 26.04 (Node 24.22) um, und beide Suiten fielen mit «keine
+        # TAP-Bilanz», obwohl alle neun Faelle jeder Suite bestanden.
+        [node, "--test", "--test-reporter=tap", str(suite)],
         cwd=_ROOT,
         capture_output=True,
         text=True,

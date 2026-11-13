@@ -49,6 +49,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`ci.yml` hat einen `workflow_call`-Auslöser**, damit `nightly.yml` es
   aufrufen kann. An den Gates selbst ändert sich nichts.
 
+### Behoben
+
+- **Die JS-Suiten fielen mit «keine TAP-Bilanz», obwohl alle Fälle bestanden.**
+  Am 8.11.2026 stellte `ubuntu-latest` von Ubuntu 24.04 auf 26.04 um, und mit
+  dem Image wechselte Node von 22.23 auf 24.22. Seit Node 23 schreibt
+  `node --test` ohne Angabe im «spec»-Format (`ℹ tests 9`) statt in TAP
+  (`# tests 9`); `tests/test_js_suiten.py` liest aber TAP. Der nächtliche
+  Gate-Lauf auf demselben Commit `abbcbf0` war am 7.11. grün und ab dem 8.11.
+  rot — sechs Nächte, ohne dass ein Commit die Ursache trug.
+
+  Der Wrapper verlangt jetzt `--test-reporter=tap` ausdrücklich. Damit hängt
+  das Format nicht mehr an der Node-Version des Runners. Ein Festnageln von
+  `ubuntu-24.04` oder Node per `setup-node` hätte das Problem nur auf den
+  nächsten Image-Wechsel verschoben.
+
 ## [0.4.0] - 2026-09-26
 
 ### Geändert
